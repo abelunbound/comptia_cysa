@@ -23,6 +23,13 @@ PAGE_CARD_STYLE = {
     "padding": "28px",
 }
 
+INTRO_CARD_STYLE = {
+    "backgroundColor": "#ffffff",
+    "borderRadius": "12px",
+    "padding": "28px",
+    "boxShadow": "6px 6px 14px rgba(0, 0, 0, 0.12)",
+}
+
 PRIMARY_BUTTON_STYLE = {
     "padding": "10px 20px",
     "backgroundColor": ACCENT_COLOR,

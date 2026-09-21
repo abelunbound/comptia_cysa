@@ -20,6 +20,12 @@ python app.py
 
 Then open the URL printed in the terminal (typically `http://127.0.0.1:8050`).
 
+## Deployment
+
+The app is deployed to Google Cloud Run. See [DEPLOYMENT.md](DEPLOYMENT.md)
+for the live URL, the redeploy command, and one-time setup/troubleshooting
+notes.
+
 ## How it works
 
 1. On the home page, select a **Domain** (e.g. `Security Operations`) and a

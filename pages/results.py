@@ -13,7 +13,6 @@ from components.ui import (
     NEUTRAL_COLOR,
     PAGE_CARD_STYLE,
     PRIMARY_BUTTON_STYLE,
-    SECONDARY_BUTTON_STYLE,
     progress_bar,
 )
 
@@ -33,7 +32,7 @@ def _empty_state():
 
 
 def _action_buttons_row(featured):
-    """Row 1: Review current attempt / Back to Exam / Take Another Exam."""
+    """Row 1: Review current attempt / Take Another Exam."""
     return html.Div(
         style={
             "display": "flex",
@@ -52,15 +51,6 @@ def _action_buttons_row(featured):
                 },
             ),
             dcc.Link(
-                "Back to Exam",
-                href="/",
-                style={
-                    **SECONDARY_BUTTON_STYLE,
-                    "display": "inline-block",
-                    "textDecoration": "none",
-                },
-            ),
-            dcc.Link(
                 "Take Another Exam",
                 href="/",
                 style={
@@ -74,8 +64,8 @@ def _action_buttons_row(featured):
 
 
 def _performance_card(attempt):
-    """Row 2: a card with the passing score/percent on the left and the
-    correct/wrong/unanswered donut chart on the right."""
+    """Row 2: 'Overall Performance' heading on top, then the percentage
+    filling the left column and a large donut chart filling the right."""
     total = attempt["total"]
     score = attempt["score"]
     answered = len(attempt["answers"])
@@ -100,37 +90,40 @@ def _performance_card(attempt):
         margin={"l": 0, "r": 0, "t": 0, "b": 0},
         showlegend=True,
         legend={"orientation": "h", "y": -0.1},
-        height=240,
-        width=240,
+        height=340,
+        width=340,
     )
 
     return html.Div(
-        style={
-            **CARD_STYLE,
-            "display": "flex",
-            "justifyContent": "space-between",
-            "alignItems": "center",
-            "gap": "24px",
-            "flexWrap": "wrap",
-        },
+        style={**CARD_STYLE},
         children=[
+            html.H3("Overall Performance", style={"marginTop": 0, "marginBottom": "20px"}),
             html.Div(
-                style={"flex": "1 1 200px"},
+                style={
+                    "display": "flex",
+                    "justifyContent": "space-between",
+                    "alignItems": "center",
+                    "gap": "24px",
+                    "flexWrap": "wrap",
+                },
                 children=[
-                    html.H3("Overall Performance", style={"marginTop": 0}),
                     html.Div(
-                        f"{score}/{total}",
-                        style={"fontSize": "36px", "fontWeight": "bold", "color": "#111827"},
+                        style={
+                            "flex": "1 1 200px",
+                            "display": "flex",
+                            "alignItems": "center",
+                            "justifyContent": "flex-start",
+                        },
+                        children=html.Div(
+                            f"{percent}%",
+                            style={"fontSize": "128px", "fontWeight": "bold", "color": color},
+                        ),
                     ),
                     html.Div(
-                        f"{percent}%",
-                        style={"fontSize": "22px", "fontWeight": "bold", "color": color},
+                        style={"flex": "0 0 auto"},
+                        children=dcc.Graph(figure=fig, config={"displayModeBar": False}),
                     ),
                 ],
-            ),
-            html.Div(
-                style={"flex": "0 0 auto"},
-                children=dcc.Graph(figure=fig, config={"displayModeBar": False}),
             ),
         ],
     )

@@ -14,6 +14,7 @@ from components.ui import (
     DISABLED_BUTTON_STYLE,
     HEADING_COLOR,
     INCORRECT_COLOR,
+    INTRO_CARD_STYLE,
     OPTION_LETTERS,
     PAGE_CARD_STYLE,
     PRIMARY_BUTTON_STYLE,
@@ -95,48 +96,49 @@ layout = shell(
     html.Div(
         [
             html.Div(
-                style={
-                    "display": "grid",
-                    "gridTemplateColumns": "7fr 3fr",
-                    "columnGap": "24px",
-                    "alignItems": "center",
-                    "padding": "0 28px",
-                    "boxSizing": "border-box",
-                    "marginBottom": "28px",
-                },
-                children=[
-                    html.Div(
-                        [
-                            html.H1(
-                                "CySA+ V4 (New Version)",
-                                style={"margin": 0, "color": HEADING_COLOR},
-                            ),
-                            html.P(
-                                "CompTIA Cybersecurity Analyst (CySA+) is a cybersecurity "
-                                "certification that validates your ability to detect, analyze, "
-                                "and respond to threats in security operations and vulnerability "
-                                "management roles. It focuses on incident detection, response, "
-                                "and continuous monitoring in modern environments, while managing "
-                                "vulnerabilities and effectively communicating critical risks.",
-                                style={
-                                    "color": SUBTEXT_COLOR,
-                                    "marginTop": "12px",
-                                    "maxWidth": "760px",
-                                },
-                            ),
-                        ],
-                        style={"gridColumn": "1"},
-                    ),
-                    html.Img(
-                        src=dash.get_asset_url("cysa_logo.webp"),
-                        style={
-                            "gridColumn": "2",
-                            "justifySelf": "center",
-                            "width": "120px",
-                            "height": "auto",
-                        },
-                    ),
-                ],
+                style={**INTRO_CARD_STYLE, "marginBottom": "28px"},
+                children=html.Div(
+                    style={
+                        "display": "grid",
+                        "gridTemplateColumns": "7fr 3fr",
+                        "columnGap": "24px",
+                        "alignItems": "center",
+                    },
+                    children=[
+                        html.Div(
+                            [
+                                html.H1(
+                                    "CySA+ V4 (New Version)",
+                                    style={"margin": 0, "color": HEADING_COLOR},
+                                ),
+                                html.P(
+                                    "CompTIA Cybersecurity Analyst (CySA+) is a cybersecurity "
+                                    "certification that validates your ability to detect, "
+                                    "analyze, and respond to threats in security operations and "
+                                    "vulnerability management roles. It focuses on incident "
+                                    "detection, response, and continuous monitoring in modern "
+                                    "environments, while managing vulnerabilities and "
+                                    "effectively communicating critical risks.",
+                                    style={
+                                        "color": SUBTEXT_COLOR,
+                                        "marginTop": "12px",
+                                        "maxWidth": "760px",
+                                    },
+                                ),
+                            ],
+                            style={"gridColumn": "1"},
+                        ),
+                        html.Img(
+                            src=dash.get_asset_url("cysa_logo.webp"),
+                            style={
+                                "gridColumn": "2",
+                                "justifySelf": "center",
+                                "width": "120px",
+                                "height": "auto",
+                            },
+                        ),
+                    ],
+                ),
             ),
             html.Div(
                 style=PAGE_CARD_STYLE,

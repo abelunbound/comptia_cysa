@@ -14,13 +14,8 @@ dash.register_page(__name__, path="/admin", name="Admin")
 NAV_ITEMS = [
     ("Dashboard", True),
     ("Exams", False),
-    ("LMS", False),
-    ("Questions", False),
-    ("Students", False),
     ("Results Database", False),
-    ("Statistics", False),
     ("Certificates", False),
-    ("Surveys", False),
     ("Settings", False),
     ("Help", False),
 ]
