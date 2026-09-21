@@ -1,0 +1,8 @@
+id,Domain,Sub-Section,Subtopic,Subbullet,Question,Option A,Option B,Option C,Option D,Correct Answer,Explanation
+1114,1.0 Security Operations,"1.1 Explain concepts related to system and network architecture in security
+operations.",Logging Concepts,Time synchronization,A security analyst is reviewing the logging configuration and notices that events from different servers show timestamps with a 5-minute discrepancy. Which logging concept is most critically misconfigured?,Ingestion,Configuration,Integrity,Time Synchronization,D,"Time synchronization ensures all logs use a consistent time source (like NTP). Without it, correlating events across different systems during an incident investigation becomes extremely difficult or impossible."
+1113,1.0 Security Operations,"1.1 Explain concepts related to system and network architecture in security
+operations.",Logging Concepts,Integrity and security,"An organization is designing a new logging strategy and needs to ensure that once a log entry is written, it cannot be altered or deleted by an attacker. What is the primary security objective being addressed?",Integrity,Retention,Availability,Confidentiality,A,"Log integrity ensures that log data has not been tampered with. Techniques like write-once media or cryptographic hashing can be used to protect the integrity of log data, which is crucial for forensic investigations and compliance."
+,2.0 Vulnerability Management,,,,,,,,,,
+,3.0 Incident Response and Management,,,,,,,,,,
+,4.0 Reporting and Communication,,,,,,,,,,
