@@ -3,6 +3,10 @@
 This page intentionally uses placeholder data throughout -- the app has no
 multi-user backend yet, so nothing here is wired to real state. It exists to
 demonstrate the target layout for a future, fully-functional admin area.
+
+SECURITY NOTE (M1): Currently accessible to any logged-in user. Role-based access
+control (admin vs. regular user) will be added in a future milestone. Residual
+risk: authenticated users can view this mock dashboard, which contains no real data.
 """
 
 import dash

@@ -47,9 +47,15 @@ gcloud run services update cysa-exam-app \
   --set-env-vars DATABASE_URL='postgresql://user:password@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE'
 ```
 
-**Security Note**: Never commit SECRET_KEY or DATABASE_URL to the
-repository. Always set them via environment variables in Cloud Run or your
-local `.env` file (which must be in `.gitignore`).
+**Security Notes**: 
+- Never commit SECRET_KEY or DATABASE_URL to the repository. Always set them 
+  via environment variables in Cloud Run or your local `.env` file (which must 
+  be in `.gitignore`).
+- **Production must never run with debug=True**: The Dockerfile uses gunicorn, 
+  which serves the Flask `server` directly and never enables debug mode. This 
+  ensures `SESSION_COOKIE_SECURE=True` is enforced (HTTPS-only session cookies). 
+  The `debug=True` in `app.py`'s `if __name__ == "__main__"` block only affects 
+  local `python app.py` development runs and is never executed in production.
 
 ## How it's built
 

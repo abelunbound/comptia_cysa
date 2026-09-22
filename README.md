@@ -60,6 +60,16 @@ Then open the URL printed in the terminal (typically `http://127.0.0.1:8050`).
 **Note**: You must be logged in to access the exam. If not logged in, you'll
 be redirected to `/login`.
 
+## Security Notes
+
+- **Production runs with debug=False**: The `debug=True` in `app.py` only applies
+  to local `python app.py` development. Cloud Run uses gunicorn (see `Dockerfile`),
+  which keeps debug disabled and ensures secure session cookies (HTTPS-only).
+- **Rate limiting**: Not implemented in M1. Signup/login rate-limiting is parked
+  as a follow-on security enhancement.
+- **Admin access**: Currently accessible to any logged-in user. Role-based access
+  control will be added in a future milestone.
+
 ## Deployment
 
 The app is deployed to Google Cloud Run. See [DEPLOYMENT.md](DEPLOYMENT.md)
