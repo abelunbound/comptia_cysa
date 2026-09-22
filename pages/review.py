@@ -304,6 +304,7 @@ def change_review_page(
     Input("_pages_location", "search"),
     Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
+    prevent_initial_call=True,
 )
 def render_review(search, history, page):
     """Render review content based on exam history and page number."""

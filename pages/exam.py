@@ -511,6 +511,7 @@ def jump_to_question(_all_clicks, data):
     Output("exam-timer-label", "children"),
     Input("exam-timer-interval", "n_intervals"),
     State("exam-session-store", "data"),
+    prevent_initial_call=True,
 )
 def update_timer(_n_intervals, data):
     """Show how long the candidate has spent on the current exam attempt."""
@@ -558,6 +559,7 @@ def update_timer(_n_intervals, data):
     Output("score-ring", "figure"),
     Output("page-number-buttons", "children"),
     Input("exam-session-store", "data"),
+    prevent_initial_call=True,
 )
 def render_exam(data):
     """Show the setup form or the current exam question, based on session state."""

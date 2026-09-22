@@ -210,6 +210,7 @@ def _progress_section(history):
 @dash.callback(
     Output("results-container", "children"),
     Input("exam-history-store", "data"),
+    prevent_initial_call=True,
 )
 def render_results(history):
     """Render results content based on exam history."""
