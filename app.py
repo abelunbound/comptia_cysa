@@ -74,8 +74,26 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# CSRF protection for state-changing requests
+# CSRF protection for state-changing requests (Flask forms only, not Dash endpoints)
+# Configure CSRF to exempt Dash internal endpoints
+server.config["WTF_CSRF_CHECK_DEFAULT"] = False  # Disable automatic CSRF on all views
 csrf = CSRFProtect(server)
+
+
+def csrf_protect():
+    """Protect Flask form routes with CSRF, but not Dash endpoints."""
+    # Skip CSRF for Dash internal AJAX endpoints
+    if request.path.startswith("/_dash"):
+        return
+    # Skip CSRF for public GET requests
+    if request.method == "GET":
+        return
+    # Protect POST requests to Flask routes (signup, login)
+    csrf.protect()
+
+
+# Apply CSRF protection before each request
+server.before_request(csrf_protect)
 
 
 # Flask routes for authentication (plain HTML forms, not Dash pages)
