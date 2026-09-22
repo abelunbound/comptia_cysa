@@ -3,6 +3,7 @@
 import dash
 import plotly.graph_objects as go
 from dash import Input, Output, dcc, html
+from flask_login import current_user
 
 from components.shell import shell
 from components.ui import (
@@ -199,15 +200,20 @@ def _progress_section(history):
 
 @dash.callback(
     Output("results-container", "children"),
+    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
     Input("exam-history-store", "data"),
+    prevent_initial_call=True,
 )
 def render_results(pathname, history):
     if pathname != "/results":
-        return dash.no_update
+        return dash.no_update, dash.no_update
+
+    if not current_user.is_authenticated:
+        return dash.no_update, "/login"
 
     if not history:
-        return _empty_state()
+        return _empty_state(), dash.no_update
 
     featured = history[-1]
 
@@ -223,4 +229,4 @@ def render_results(pathname, history):
                 ],
             ),
         ]
-    )
+    ), dash.no_update

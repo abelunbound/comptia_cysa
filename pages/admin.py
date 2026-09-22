@@ -7,7 +7,8 @@ demonstrate the target layout for a future, fully-functional admin area.
 
 import dash
 import plotly.graph_objects as go
-from dash import dcc, html
+from dash import Input, Output, dcc, html
+from flask_login import current_user
 
 dash.register_page(__name__, path="/admin", name="Admin")
 
@@ -189,65 +190,82 @@ def _results_table():
     )
 
 
-layout = html.Div(
-    style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
-    children=[
-        _sidebar(),
-        html.Div(
-            style={"flex": 1, "padding": "32px", "backgroundColor": "#f9fafb"},
-            children=[
-                html.Div(
-                    [
-                        html.H2("Good Morning", style={"margin": 0}),
-                        html.P(
-                            "This is a static preview of a future admin dashboard.",
-                            style={"color": "#6b7280"},
-                        ),
-                    ],
-                    style={"marginBottom": "24px"},
-                ),
-                html.Div(
-                    style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
-                    children=[_stat_card(card) for card in STAT_CARDS],
-                ),
-                html.Div(
-                    style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
-                    children=[
-                        html.Div(
-                            _exam_taken_chart(),
-                            style={
-                                "flex": 3,
-                                "backgroundColor": "white",
-                                "border": "1px solid #e5e7eb",
-                                "borderRadius": "10px",
-                                "padding": "12px",
-                            },
-                        ),
-                        html.Div(
-                            _average_results_chart(),
-                            style={
-                                "flex": 2,
-                                "backgroundColor": "white",
-                                "border": "1px solid #e5e7eb",
-                                "borderRadius": "10px",
-                                "padding": "12px",
-                            },
-                        ),
-                    ],
-                ),
-                html.Div(
-                    style={
-                        "backgroundColor": "white",
-                        "border": "1px solid #e5e7eb",
-                        "borderRadius": "10px",
-                        "padding": "20px",
-                    },
-                    children=[
-                        html.H3("Browse Test Results", style={"marginTop": 0}),
-                        _results_table(),
-                    ],
-                ),
-            ],
-        ),
-    ],
+layout = html.Div(id="admin-container")
+
+
+@dash.callback(
+    Output("admin-container", "children"),
+    Output("_pages_location", "pathname", allow_duplicate=True),
+    Input("_pages_location", "pathname"),
+    prevent_initial_call=True,
 )
+def render_admin(pathname):
+    """Protect admin page - require authentication."""
+    if pathname != "/admin":
+        return dash.no_update, dash.no_update
+
+    if not current_user.is_authenticated:
+        return dash.no_update, "/login"
+
+    return html.Div(
+        style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
+        children=[
+            _sidebar(),
+            html.Div(
+                style={"flex": 1, "padding": "32px", "backgroundColor": "#f9fafb"},
+                children=[
+                    html.Div(
+                        [
+                            html.H2("Good Morning", style={"margin": 0}),
+                            html.P(
+                                "This is a static preview of a future admin dashboard.",
+                                style={"color": "#6b7280"},
+                            ),
+                        ],
+                        style={"marginBottom": "24px"},
+                    ),
+                    html.Div(
+                        style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
+                        children=[_stat_card(card) for card in STAT_CARDS],
+                    ),
+                    html.Div(
+                        style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
+                        children=[
+                            html.Div(
+                                _exam_taken_chart(),
+                                style={
+                                    "flex": 3,
+                                    "backgroundColor": "white",
+                                    "border": "1px solid #e5e7eb",
+                                    "borderRadius": "10px",
+                                    "padding": "12px",
+                                },
+                            ),
+                            html.Div(
+                                _average_results_chart(),
+                                style={
+                                    "flex": 2,
+                                    "backgroundColor": "white",
+                                    "border": "1px solid #e5e7eb",
+                                    "borderRadius": "10px",
+                                    "padding": "12px",
+                                },
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        style={
+                            "backgroundColor": "white",
+                            "border": "1px solid #e5e7eb",
+                            "borderRadius": "10px",
+                            "padding": "20px",
+                        },
+                        children=[
+                            html.H3("Browse Test Results", style={"marginTop": 0}),
+                            _results_table(),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    ), dash.no_update

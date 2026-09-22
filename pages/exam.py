@@ -5,6 +5,7 @@ from datetime import datetime
 
 import dash
 from dash import ALL, Input, Output, State, dcc, html
+from flask_login import current_user
 
 from components.shell import shell
 from components.ui import (
@@ -356,14 +357,19 @@ layout = shell(
 @dash.callback(
     Output("subsection-dropdown", "options"),
     Output("subsection-dropdown", "value"),
+    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("domain-dropdown", "value"),
+    Input("_pages_location", "pathname"),
+    prevent_initial_call=True,
 )
-def update_subsections(selected_domain):
+def update_subsections(selected_domain, pathname):
     """Populate the Sub-Section dropdown based on the chosen Domain."""
+    if pathname == "/" and not current_user.is_authenticated:
+        return [], None, "/login"
     if not selected_domain:
-        return [], None
+        return [], None, dash.no_update
     subsections = sorted(df.loc[df["Domain"] == selected_domain, "Sub-Section"].unique())
-    return [{"label": sub, "value": sub} for sub in subsections], None
+    return [{"label": sub, "value": sub} for sub in subsections], None, dash.no_update
 
 
 @dash.callback(

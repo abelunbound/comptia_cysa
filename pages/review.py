@@ -5,6 +5,7 @@ from urllib.parse import parse_qs
 
 import dash
 from dash import ALL, Input, Output, State, dcc, html
+from flask_login import current_user
 
 from components.shell import shell
 from components.ui import (
@@ -294,21 +295,26 @@ def change_review_page(
 
 @dash.callback(
     Output("review-container", "children"),
+    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
     Input("_pages_location", "search"),
     Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
+    prevent_initial_call=True,
 )
 def render_review(pathname, search, history, page):
     if pathname != "/review":
-        return dash.no_update
+        return dash.no_update, dash.no_update
+
+    if not current_user.is_authenticated:
+        return dash.no_update, "/login"
 
     if not history:
-        return _empty_state()
+        return _empty_state(), dash.no_update
 
     attempt = _current_attempt(history, search)
     if not attempt:
-        return _empty_state()
+        return _empty_state(), dash.no_update
 
     questions = attempt["questions"]
     answers = attempt["answers"]
@@ -364,4 +370,4 @@ def render_review(pathname, search, history, page):
                 children=body_children,
             ),
         ]
-    )
+    ), dash.no_update

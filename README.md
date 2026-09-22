@@ -12,6 +12,43 @@ source venv/bin/activate  # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
 ```
 
+### Authentication Setup
+
+The app requires authentication to access exam, results, review, and admin
+pages. Set up authentication as follows:
+
+1. **Generate a SECRET_KEY** for session security:
+   ```bash
+   python -c 'import secrets; print(secrets.token_hex(32))'
+   ```
+
+2. **Set the SECRET_KEY environment variable**:
+   ```bash
+   export SECRET_KEY='your-generated-secret-key-here'
+   ```
+   
+   On Windows:
+   ```cmd
+   set SECRET_KEY=your-generated-secret-key-here
+   ```
+
+3. **(Optional) Configure database URL** for production. By default, the app
+   uses SQLite (`instance/users.db`) for local development. For Cloud Run
+   with Cloud SQL, set:
+   ```bash
+   export DATABASE_URL='postgresql://user:password@host/dbname'
+   ```
+
+### Creating the First User
+
+After starting the app, visit `http://127.0.0.1:8050/signup` to create your
+first user account. You'll need:
+- A valid email address
+- A password of at least 8 characters
+
+Once signed up, you'll be automatically logged in and redirected to the exam
+page.
+
 ## Run
 
 ```bash
@@ -19,6 +56,9 @@ python app.py
 ```
 
 Then open the URL printed in the terminal (typically `http://127.0.0.1:8050`).
+
+**Note**: You must be logged in to access the exam. If not logged in, you'll
+be redirected to `/login`.
 
 ## Deployment
 

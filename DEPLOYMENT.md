@@ -12,7 +12,44 @@ redeploy after future changes.
 | **Region** | `us-central1` |
 | **Service name** | `cysa-exam-app` |
 | **Service URL** | https://cysa-exam-app-104739181475.us-central1.run.app |
-| **Access** | Public / unauthenticated |
+| **Access** | Public (requires user authentication after M1) |
+
+## Required Environment Variables
+
+The app requires the following environment variables to be set in Cloud Run:
+
+### SECRET_KEY (required)
+
+A secret key for Flask session security. Generate with:
+
+```bash
+python -c 'import secrets; print(secrets.token_hex(32))'
+```
+
+Set in Cloud Run:
+
+```bash
+gcloud run services update cysa-exam-app \
+  --region us-central1 \
+  --project cybersecuritylab-509321 \
+  --set-env-vars SECRET_KEY='your-generated-secret-key-here'
+```
+
+### DATABASE_URL (optional for M1, recommended for production)
+
+Connection string for Cloud SQL PostgreSQL. For M1, SQLite is used by
+default if this is not set. For production with Cloud SQL:
+
+```bash
+gcloud run services update cysa-exam-app \
+  --region us-central1 \
+  --project cybersecuritylab-509321 \
+  --set-env-vars DATABASE_URL='postgresql://user:password@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE'
+```
+
+**Security Note**: Never commit SECRET_KEY or DATABASE_URL to the
+repository. Always set them via environment variables in Cloud Run or your
+local `.env` file (which must be in `.gitignore`).
 
 ## How it's built
 
@@ -53,8 +90,9 @@ This uses Cloud Build to build the `Dockerfile` remotely (no local Docker
 install required), pushes the image to Artifact Registry, and rolls out a
 new Cloud Run revision with zero downtime. It typically takes 1-3 minutes.
 
-To also make sure it stays publicly accessible (this flag is idempotent —
-safe to include every time, but not required after the first deploy):
+**Important**: The app now requires user authentication after M1. The
+service itself should remain publicly accessible (no Cloud Run IAM auth
+required), but users must sign up and log in to access exams:
 
 ```bash
 gcloud run deploy cysa-exam-app \
@@ -66,6 +104,12 @@ gcloud run deploy cysa-exam-app \
 
 After it finishes, it prints the same stable **Service URL** shown above —
 that URL doesn't change between deploys.
+
+### First Deployment with Authentication (M1+)
+
+On the first deployment after adding authentication, you MUST set the
+SECRET_KEY environment variable (see "Required Environment Variables"
+section above). Without it, the app will fail to start.
 
 ## Verifying a deployment
 
