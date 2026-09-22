@@ -24,14 +24,20 @@ dash.register_page(__name__, path="/review", name="Review")
 
 QUESTIONS_PER_PAGE = 10
 
-layout = shell(
-    html.Div(
-        [
-            dcc.Store(id="review-page-store", data=0),
-            html.Div(id="review-container"),
-        ]
+
+def layout(**kwargs):
+    """Layout function: check auth and return review UI or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return shell(html.Div())
+    
+    return shell(
+        html.Div(
+            [
+                dcc.Store(id="review-page-store", data=0),
+                html.Div(id="review-container"),
+            ]
+        )
     )
-)
 
 
 def _empty_state():
@@ -295,20 +301,12 @@ def change_review_page(
 
 @dash.callback(
     Output("review-container", "children"),
-    Input("_pages_location", "pathname"),
     Input("_pages_location", "search"),
     Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
 )
-def render_review(pathname, search, history, page):
-    """Render review if authenticated (Flask before_request handles redirect)."""
-    if pathname != "/review":
-        return dash.no_update
-
-    # Flask before_request already redirected unauthenticated users
-    if not current_user.is_authenticated:
-        return html.Div()
-
+def render_review(search, history, page):
+    """Render review content based on exam history and page number."""
     if not history:
         return _empty_state()
 

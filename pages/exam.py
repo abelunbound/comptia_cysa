@@ -93,8 +93,12 @@ def _page_buttons(total, current_idx):
     return buttons
 
 
-# Deferred layout: auth check on page load, then render full UI if authenticated
-layout = shell(html.Div(id="exam-container"))
+def layout(**kwargs):
+    """Layout function: check auth and return full UI or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return shell(html.Div())  # Flask before_request redirects; this won't paint
+    
+    return shell(_exam_ui())
 
 
 def _exam_ui():
@@ -356,23 +360,6 @@ def _exam_ui():
             ),
         ]
     )
-
-
-@dash.callback(
-    Output("exam-container", "children"),
-    Input("_pages_location", "pathname"),
-)
-def render_exam_page(pathname):
-    """Render exam UI if authenticated (Flask before_request handles redirect)."""
-    if pathname != "/":
-        return dash.no_update
-    
-    # Flask before_request already redirected unauthenticated users.
-    # If we're here, user is authenticated; render the exam UI.
-    if not current_user.is_authenticated:
-        return html.Div()  # Belt-and-suspenders empty div
-    
-    return _exam_ui()
 
 
 @dash.callback(

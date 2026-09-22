@@ -16,6 +16,15 @@ from flask_login import current_user
 
 dash.register_page(__name__, path="/admin", name="Admin")
 
+
+def layout(**kwargs):
+    """Layout function: check auth and return admin dashboard or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return html.Div()
+    
+    return _admin_dashboard()
+
+
 NAV_ITEMS = [
     ("Dashboard", True),
     ("Exams", False),
@@ -194,22 +203,8 @@ def _results_table():
     )
 
 
-layout = html.Div(id="admin-container")
-
-
-@dash.callback(
-    Output("admin-container", "children"),
-    Input("_pages_location", "pathname"),
-)
-def render_admin(pathname):
-    """Render admin dashboard if authenticated (Flask before_request handles redirect)."""
-    if pathname != "/admin":
-        return dash.no_update
-
-    # Flask before_request already redirected unauthenticated users
-    if not current_user.is_authenticated:
-        return html.Div()
-
+def _admin_dashboard():
+    """Return the admin dashboard UI."""
     return html.Div(
         style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
         children=[
