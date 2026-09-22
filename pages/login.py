@@ -16,7 +16,7 @@ dash.register_page(__name__, path="/login", name="Log In")
 
 layout = html.Div(
     [
-        dcc.Location(id="login-redirect", refresh=True),
+        dcc.Store(id="login-redirect-to"),
         html.Div(
             style={
                 "display": "flex",
@@ -148,8 +148,23 @@ layout = html.Div(
 )
 
 
+dash.clientside_callback(
+    """
+    function(redirectTo) {
+        if (redirectTo) {
+            window.location.assign(redirectTo);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("login-redirect-to", "data", allow_duplicate=True),
+    Input("login-redirect-to", "data"),
+    prevent_initial_call=True,
+)
+
+
 @dash.callback(
-    Output("login-redirect", "href"),
+    Output("login-redirect-to", "data"),
     Output("login-error-msg", "children"),
     Output("login-error-msg", "style"),
     Input("login-btn", "n_clicks"),

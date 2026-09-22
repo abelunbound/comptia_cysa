@@ -16,7 +16,7 @@ dash.register_page(__name__, path="/signup", name="Sign Up")
 
 layout = html.Div(
     [
-        dcc.Location(id="signup-redirect", refresh=True),
+        dcc.Store(id="signup-redirect-to"),
         html.Div(
             style={
                 "display": "flex",
@@ -176,8 +176,23 @@ layout = html.Div(
 )
 
 
+dash.clientside_callback(
+    """
+    function(redirectTo) {
+        if (redirectTo) {
+            window.location.assign(redirectTo);
+        }
+        return window.dash_clientside.no_update;
+    }
+    """,
+    Output("signup-redirect-to", "data", allow_duplicate=True),
+    Input("signup-redirect-to", "data"),
+    prevent_initial_call=True,
+)
+
+
 @dash.callback(
-    Output("signup-redirect", "href"),
+    Output("signup-redirect-to", "data"),
     Output("signup-error-msg", "children"),
     Output("signup-error-msg", "style"),
     Input("signup-btn", "n_clicks"),
