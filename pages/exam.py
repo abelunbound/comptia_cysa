@@ -93,8 +93,13 @@ def _page_buttons(total, current_idx):
     return buttons
 
 
-layout = shell(
-    html.Div(
+# Deferred layout: auth check on page load, then render full UI if authenticated
+layout = shell(html.Div(id="exam-container"))
+
+
+def _exam_ui():
+    """Return the full exam UI (intro banner + setup/exam sections)."""
+    return html.Div(
         [
             html.Div(
                 style={**INTRO_CARD_STYLE, "marginBottom": "28px"},
@@ -351,25 +356,36 @@ layout = shell(
             ),
         ]
     )
+
+
+@dash.callback(
+    Output("exam-container", "children"),
+    Output("_pages_location", "pathname", allow_duplicate=True),
+    Input("_pages_location", "pathname"),
+    prevent_initial_call=False,
 )
+def render_exam_page(pathname):
+    """Page-load auth gate: redirect to login if not authenticated, else render exam UI."""
+    if pathname != "/":
+        return dash.no_update, dash.no_update
+    
+    if not current_user.is_authenticated:
+        return dash.no_update, "/login"
+    
+    return _exam_ui(), dash.no_update
 
 
 @dash.callback(
     Output("subsection-dropdown", "options"),
     Output("subsection-dropdown", "value"),
-    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("domain-dropdown", "value"),
-    Input("_pages_location", "pathname"),
-    prevent_initial_call=True,
 )
-def update_subsections(selected_domain, pathname):
+def update_subsections(selected_domain):
     """Populate the Sub-Section dropdown based on the chosen Domain."""
-    if pathname == "/" and not current_user.is_authenticated:
-        return [], None, "/login"
     if not selected_domain:
-        return [], None, dash.no_update
+        return [], None
     subsections = sorted(df.loc[df["Domain"] == selected_domain, "Sub-Section"].unique())
-    return [{"label": sub, "value": sub} for sub in subsections], None, dash.no_update
+    return [{"label": sub, "value": sub} for sub in subsections], None
 
 
 @dash.callback(

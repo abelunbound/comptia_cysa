@@ -18,7 +18,8 @@ import os
 
 import dash
 from dash import Dash, dcc, html
-from flask_login import LoginManager
+from flask import redirect, request
+from flask_login import LoginManager, current_user
 from flask_wtf.csrf import CSRFProtect
 
 from auth import User, get_database_url, init_auth
@@ -65,6 +66,30 @@ def load_user(user_id):
 
 # CSRF protection for state-changing requests
 csrf = CSRFProtect(server)
+
+
+# HTTP-level page-load protection: redirect unauthenticated users before any UI renders
+@server.before_request
+def require_login():
+    """Redirect unauthenticated users to /login for protected routes.
+    
+    Protected routes: /, /results, /review, /admin
+    Public routes: /login, /signup, /logout, /assets/*, /_dash-*, /_reload-hash
+    """
+    # Allow public authentication routes
+    if request.path in ("/login", "/signup", "/logout"):
+        return None
+    
+    # Allow Dash internal routes and static assets
+    if request.path.startswith(("/_dash-", "/assets/", "/_reload-hash")):
+        return None
+    
+    # Protect all other routes (/, /results, /review, /admin, etc.)
+    if not current_user.is_authenticated:
+        return redirect("/login")
+    
+    return None
+
 
 app.layout = html.Div(
     [
