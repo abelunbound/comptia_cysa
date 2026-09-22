@@ -60,6 +60,28 @@ Then open the URL printed in the terminal (typically `http://127.0.0.1:8050`).
 **Note**: You must be logged in to access the exam. If not logged in, you'll
 be redirected to `/login`.
 
+## Running Tests
+
+To run the test suite locally:
+
+```bash
+# Install test dependencies
+pip install pytest
+
+# Run all tests
+pytest -v tests/
+
+# Run specific test file
+pytest -v tests/test_auth.py
+```
+
+Tests cover:
+- Auth module functions (user creation, password hashing, authentication)
+- Flask `before_request` auth gate (protected route redirects)
+- E2E smoke test (signup → logout → login → protected access)
+
+**Note**: Tests use temporary SQLite databases and set `SECRET_KEY` automatically.
+
 ## Security Notes
 
 - **Production runs with debug=False**: The `debug=True` in `app.py` only applies
