@@ -16,9 +16,20 @@ redeploy after future changes.
 
 ## Milestone 1 redeployment
 
-Use this path after Auth (PR #1) is on `main`. Run from a machine logged into
-GCP project `cybersecuritylab-509321`, at the repo root (where the `Dockerfile`
-lives).
+**Fast path (recommended):** from a machine logged into GCP project
+`cybersecuritylab-509321`, at the repo root:
+
+```bash
+git checkout main && git pull
+chmod +x scripts/redeploy-cloud-run.sh
+./scripts/redeploy-cloud-run.sh
+```
+
+That script enables Secret Manager if needed, creates/reuses
+`cysa-exam-secret-key`, grants the Cloud Run runtime SA access, deploys with
+`--update-secrets=SECRET_KEY=…`, and prints a quick `/` → `/login` check.
+
+Manual steps below match what the script does.
 
 **M1 constraints**
 
@@ -30,7 +41,7 @@ lives).
 - Leave `SESSION_COOKIE_SECURE` **unset** so cookies stay Secure on HTTPS.
 - After the revision is Serving, ping Delivery with the live URL for auth smoke.
 
-### Steps
+### Manual steps
 
 1. Pull `main` and cd to the repo root:
 
@@ -80,10 +91,10 @@ https://cysa-exam-app-104739181475.us-central1.run.app
 
 ### Milestone 2+ (future)
 
-When Cloud SQL / durable `DATABASE_URL` lands in M2, **update this file** with
-the correct redeploy steps (Secret Manager or Cloud SQL connector for
-`DATABASE_URL`, no SQLite-on-Cloud-Run smoke path). Do not treat the M1
-SQLite fallback as production auth storage.
+When Cloud SQL / durable `DATABASE_URL` lands in M2, **update this file and
+`scripts/redeploy-cloud-run.sh`** with the correct redeploy steps (Secret
+Manager or Cloud SQL connector for `DATABASE_URL`, no SQLite-on-Cloud-Run
+smoke path). Do not treat the M1 SQLite fallback as production auth storage.
 
 ## Required Environment Variables
 
@@ -92,7 +103,7 @@ SQLite fallback as production auth storage.
 Flask session secret. The app fails to start if this is missing.
 
 **Preferred (M1+):** mount from Secret Manager via `--update-secrets` — see
-[Milestone 1 redeployment](#milestone-1-redeployment).
+[Milestone 1 redeployment](#milestone-1-redeployment) / `scripts/redeploy-cloud-run.sh`.
 
 Generate a value with:
 
@@ -157,7 +168,8 @@ gcloud run services update cysa-exam-app \
 
 ## Redeploying after a code change (routine)
 
-For routine code-only updates **after** M1 secrets are already mounted, from
+For routine code-only updates **after** M1 secrets are already mounted, prefer
+`./scripts/redeploy-cloud-run.sh` (keeps the Secret Manager mount) or from
 the project root:
 
 ```bash
@@ -182,8 +194,7 @@ instead of this shorter command.
 ## Verifying a deployment
 
 ```bash
-curl -s -o /dev/null -w "HTTP %{http_code}\n" \
-  https://cysa-exam-app-104739181475.us-central1.run.app/
+curl -sI https://cysa-exam-app-104739181475.us-central1.run.app/ | head -5
 ```
 
 Unauthenticated `/` should redirect to `/login` (typically HTTP 302). You can
@@ -252,7 +263,7 @@ these steps first (all one-time, per-project):
 - **`PERMISSION_DENIED: ... default service account is missing required IAM
   permissions`** during `gcloud run deploy --source .` → see step 3 above.
 - **Container fails to start / SECRET_KEY required** → Secret Manager mount
-  missing; re-run the M1 `--update-secrets` deploy.
+  missing; re-run `./scripts/redeploy-cloud-run.sh`.
 - **App loads but data looks stale** → the CSV is baked into the image;
   redeploy after editing `cysa_plus_questions.csv` or `questions.csv`.
 - **Local sanity check before deploying** — you can verify the production
