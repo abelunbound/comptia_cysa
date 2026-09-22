@@ -14,19 +14,93 @@ redeploy after future changes.
 | **Service URL** | https://cysa-exam-app-104739181475.us-central1.run.app |
 | **Access** | Public (requires user authentication after M1) |
 
-## Required Environment Variables
+## Milestone 1 redeployment
 
-The app requires the following environment variables to be set in Cloud Run:
+Use this path after Auth (PR #1) is on `main`. Run from a machine logged into
+GCP project `cybersecuritylab-509321`, at the repo root (where the `Dockerfile`
+lives).
+
+**M1 constraints**
+
+- Mount `SECRET_KEY` from **Secret Manager** (`--update-secrets`). Prefer this
+  over plaintext `--set-env-vars` (avoids shell history / accidental commits).
+- Leave `DATABASE_URL` **unset** — the app falls back to SQLite
+  (`instance/users.db`) for M1 smoke only (ephemeral; not durable across
+  revisions/instances).
+- Leave `SESSION_COOKIE_SECURE` **unset** so cookies stay Secure on HTTPS.
+- After the revision is Serving, ping Delivery with the live URL for auth smoke.
+
+### Steps
+
+1. Pull `main` and cd to the repo root:
+
+```bash
+git checkout main && git pull
+```
+
+2. Enable Secret Manager if needed (one-time):
+
+```bash
+gcloud services enable secretmanager.googleapis.com --project=cybersecuritylab-509321
+```
+
+3. Create the secret (skip if `cysa-exam-secret-key` already exists):
+
+```bash
+python -c 'import secrets; print(secrets.token_hex(32), end="")' | \
+  gcloud secrets create cysa-exam-secret-key --data-file=- --project=cybersecuritylab-509321
+```
+
+4. Grant the Cloud Run runtime service account access:
+
+```bash
+PROJECT_NUMBER=$(gcloud projects describe cybersecuritylab-509321 --format='value(projectNumber)')
+gcloud secrets add-iam-policy-binding cysa-exam-secret-key \
+  --project=cybersecuritylab-509321 \
+  --role=roles/secretmanager.secretAccessor \
+  --member="serviceAccount:${PROJECT_NUMBER}-compute@developer.gserviceaccount.com"
+```
+
+5. Redeploy with `SECRET_KEY` from Secret Manager only:
+
+```bash
+gcloud run deploy cysa-exam-app \
+  --source . \
+  --region us-central1 \
+  --project cybersecuritylab-509321 \
+  --allow-unauthenticated \
+  --update-secrets=SECRET_KEY=cysa-exam-secret-key:latest
+```
+
+6. When the new revision is Serving, paste the Service URL in the team room
+   and ask Delivery to run the live auth smoke.
+
+Stable URL (unchanged between deploys):
+https://cysa-exam-app-104739181475.us-central1.run.app
+
+### Milestone 2+ (future)
+
+When Cloud SQL / durable `DATABASE_URL` lands in M2, **update this file** with
+the correct redeploy steps (Secret Manager or Cloud SQL connector for
+`DATABASE_URL`, no SQLite-on-Cloud-Run smoke path). Do not treat the M1
+SQLite fallback as production auth storage.
+
+## Required Environment Variables
 
 ### SECRET_KEY (required)
 
-A secret key for Flask session security. Generate with:
+Flask session secret. The app fails to start if this is missing.
+
+**Preferred (M1+):** mount from Secret Manager via `--update-secrets` — see
+[Milestone 1 redeployment](#milestone-1-redeployment).
+
+Generate a value with:
 
 ```bash
 python -c 'import secrets; print(secrets.token_hex(32))'
 ```
 
-Set in Cloud Run:
+Weaker alternative (lands in shell history; avoid for the real key):
 
 ```bash
 gcloud run services update cysa-exam-app \
@@ -35,10 +109,10 @@ gcloud run services update cysa-exam-app \
   --set-env-vars SECRET_KEY='your-generated-secret-key-here'
 ```
 
-### DATABASE_URL (optional for M1, recommended for production)
+### DATABASE_URL (optional for M1; required for durable prod / M2+)
 
-Connection string for Cloud SQL PostgreSQL. For M1, SQLite is used by
-default if this is not set. For production with Cloud SQL:
+Connection string for Cloud SQL PostgreSQL. For M1, leave unset — the app
+defaults to SQLite. For Cloud SQL later:
 
 ```bash
 gcloud run services update cysa-exam-app \
@@ -47,14 +121,17 @@ gcloud run services update cysa-exam-app \
   --set-env-vars DATABASE_URL='postgresql://user:password@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE'
 ```
 
-**Security Notes**: 
-- Never commit SECRET_KEY or DATABASE_URL to the repository. Always set them 
-  via environment variables in Cloud Run or your local `.env` file (which must 
-  be in `.gitignore`).
-- **Production must never run with debug=True**: The Dockerfile uses gunicorn, 
-  which serves the Flask `server` directly and never enables debug mode. This 
-  ensures `SESSION_COOKIE_SECURE=True` is enforced (HTTPS-only session cookies). 
-  The `debug=True` in `app.py`'s `if __name__ == "__main__"` block only affects 
+(Prefer Secret Manager for this value in M2 as well.)
+
+**Security Notes**:
+- Never commit `SECRET_KEY` or `DATABASE_URL` to the repository. Prefer Secret
+  Manager mounts on Cloud Run; local `.env` must stay in `.gitignore`.
+- Do **not** set `SESSION_COOKIE_SECURE=false` on Cloud Run (HTTPS). That flag
+  is for local HTTP only.
+- **Production must never run with debug=True**: The Dockerfile uses gunicorn,
+  which serves the Flask `server` directly and never enables debug mode. This
+  ensures `SESSION_COOKIE_SECURE=True` by default (HTTPS-only session cookies).
+  The `debug=True` in `app.py`'s `if __name__ == "__main__"` block only affects
   local `python app.py` development runs and is never executed in production.
 
 ## How it's built
@@ -71,34 +148,17 @@ gcloud run services update cysa-exam-app \
   refers to.
 - **`.dockerignore`** keeps the image lean (excludes `venv/`, `__pycache__/`,
   `.git/`, etc).
-- **State**: all exam/session data lives in the browser via
-  `dcc.Store(storage_type="session")` — nothing is persisted server-side.
-  This means the app is fully stateless, which is a great fit for Cloud
-  Run's autoscaling (including scale-to-zero when idle, so it costs ~nothing
-  when nobody's using it).
+- **State**: exam UI session data lives in the browser via
+  `dcc.Store(storage_type="session")`. Auth users live in SQLite (M1) or
+  Postgres (M2+) — see Milestone sections above.
 - **Question bank**: `cysa_plus_questions.csv` is baked into the container
   image at build time. If you edit the CSV, you must redeploy (rebuild) for
   the change to go live — it's not read from a live/mounted file.
 
-## Redeploying after a code change
+## Redeploying after a code change (routine)
 
-This is the only command you need for routine updates. Run it from the
-project root (where the `Dockerfile` lives):
-
-```bash
-gcloud run deploy cysa-exam-app \
-  --source . \
-  --region us-central1 \
-  --project cybersecuritylab-509321
-```
-
-This uses Cloud Build to build the `Dockerfile` remotely (no local Docker
-install required), pushes the image to Artifact Registry, and rolls out a
-new Cloud Run revision with zero downtime. It typically takes 1-3 minutes.
-
-**Important**: The app now requires user authentication after M1. The
-service itself should remain publicly accessible (no Cloud Run IAM auth
-required), but users must sign up and log in to access exams:
+For routine code-only updates **after** M1 secrets are already mounted, from
+the project root:
 
 ```bash
 gcloud run deploy cysa-exam-app \
@@ -108,14 +168,16 @@ gcloud run deploy cysa-exam-app \
   --allow-unauthenticated
 ```
 
-After it finishes, it prints the same stable **Service URL** shown above —
-that URL doesn't change between deploys.
+This uses Cloud Build to build the `Dockerfile` remotely (no local Docker
+install required), pushes the image to Artifact Registry, and rolls out a
+new Cloud Run revision with zero downtime. It typically takes 1-3 minutes.
 
-### First Deployment with Authentication (M1+)
+The service stays publicly accessible (no Cloud Run IAM auth); users must
+still sign up / log in to use exams. The **Service URL** does not change
+between deploys.
 
-On the first deployment after adding authentication, you MUST set the
-SECRET_KEY environment variable (see "Required Environment Variables"
-section above). Without it, the app will fail to start.
+If `SECRET_KEY` is not yet mounted, follow [Milestone 1 redeployment](#milestone-1-redeployment)
+instead of this shorter command.
 
 ## Verifying a deployment
 
@@ -124,13 +186,16 @@ curl -s -o /dev/null -w "HTTP %{http_code}\n" \
   https://cysa-exam-app-104739181475.us-central1.run.app/
 ```
 
-Should print `HTTP 200`. You can also check recent revisions and traffic
-split with:
+Unauthenticated `/` should redirect to `/login` (typically HTTP 302). You can
+also check recent revisions and traffic split with:
 
 ```bash
 gcloud run revisions list --service cysa-exam-app --region us-central1 \
   --project cybersecuritylab-509321
 ```
+
+Live auth smoke (signup → exam paints → shell Logout → re-login → protected
+redirects) is owned by Delivery after each M1+ ship.
 
 ## Rolling back
 
@@ -157,7 +222,8 @@ these steps first (all one-time, per-project):
 2. **Enable the required APIs:**
    ```bash
    gcloud services enable run.googleapis.com cloudbuild.googleapis.com \
-     artifactregistry.googleapis.com --project YOUR_PROJECT_ID
+     artifactregistry.googleapis.com secretmanager.googleapis.com \
+     --project YOUR_PROJECT_ID
    ```
 
 3. **Grant IAM roles to the default Compute service account.** On a
@@ -175,8 +241,9 @@ these steps first (all one-time, per-project):
      --role="roles/cloudbuild.builds.builder"
    ```
 
-4. Then run the same `gcloud run deploy` command from the "Redeploying"
-   section above, swapping in the new project ID (and region if desired).
+4. Then follow [Milestone 1 redeployment](#milestone-1-redeployment) (or the
+   routine redeploy section once secrets are mounted), swapping in the new
+   project ID (and region if desired).
 
 ## Troubleshooting
 
@@ -184,11 +251,15 @@ these steps first (all one-time, per-project):
   isn't linked to the project yet. See step 1 above.
 - **`PERMISSION_DENIED: ... default service account is missing required IAM
   permissions`** during `gcloud run deploy --source .` → see step 3 above.
+- **Container fails to start / SECRET_KEY required** → Secret Manager mount
+  missing; re-run the M1 `--update-secrets` deploy.
 - **App loads but data looks stale** → the CSV is baked into the image;
   redeploy after editing `cysa_plus_questions.csv` or `questions.csv`.
 - **Local sanity check before deploying** — you can verify the production
   entrypoint works without touching Cloud Run at all:
   ```bash
+  export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')
+  export SESSION_COOKIE_SECURE=false
   pip install gunicorn
   PORT=8081 gunicorn --bind 0.0.0.0:8081 app:server
   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081/
