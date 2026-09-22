@@ -15,16 +15,19 @@ from components.ui import (
 dash.register_page(__name__, path="/signup", name="Sign Up")
 
 layout = html.Div(
-    style={
-        "display": "flex",
-        "justifyContent": "center",
-        "alignItems": "center",
-        "minHeight": "100vh",
-        "backgroundColor": "#f9fafb",
-        "fontFamily": "Arial, sans-serif",
-    },
-    children=[
+    [
+        dcc.Location(id="signup-redirect", refresh=True),
         html.Div(
+            style={
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "minHeight": "100vh",
+                "backgroundColor": "#f9fafb",
+                "fontFamily": "Arial, sans-serif",
+            },
+            children=[
+                html.Div(
             style={
                 "backgroundColor": "white",
                 "padding": "40px",
@@ -166,13 +169,15 @@ layout = html.Div(
                     ],
                 ),
             ],
-        )
-    ],
+        ),
+            ],
+        ),
+    ]
 )
 
 
 @dash.callback(
-    Output("_pages_location", "pathname", allow_duplicate=True),
+    Output("signup-redirect", "href"),
     Output("signup-error-msg", "children"),
     Output("signup-error-msg", "style"),
     Input("signup-btn", "n_clicks"),

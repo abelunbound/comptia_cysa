@@ -15,16 +15,19 @@ from components.ui import (
 dash.register_page(__name__, path="/login", name="Log In")
 
 layout = html.Div(
-    style={
-        "display": "flex",
-        "justifyContent": "center",
-        "alignItems": "center",
-        "minHeight": "100vh",
-        "backgroundColor": "#f9fafb",
-        "fontFamily": "Arial, sans-serif",
-    },
-    children=[
+    [
+        dcc.Location(id="login-redirect", refresh=True),
         html.Div(
+            style={
+                "display": "flex",
+                "justifyContent": "center",
+                "alignItems": "center",
+                "minHeight": "100vh",
+                "backgroundColor": "#f9fafb",
+                "fontFamily": "Arial, sans-serif",
+            },
+            children=[
+                html.Div(
             style={
                 "backgroundColor": "white",
                 "padding": "40px",
@@ -138,13 +141,15 @@ layout = html.Div(
                     ],
                 ),
             ],
-        )
-    ],
+        ),
+            ],
+        ),
+    ]
 )
 
 
 @dash.callback(
-    Output("_pages_location", "pathname", allow_duplicate=True),
+    Output("login-redirect", "href"),
     Output("login-error-msg", "children"),
     Output("login-error-msg", "style"),
     Input("login-btn", "n_clicks"),
