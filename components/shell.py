@@ -33,7 +33,7 @@ def shell(content):
                         "marginBottom": "16px",
                     },
                     children=[
-                        dcc.Link(
+                        html.A(
                             "Logout",
                             href="/logout",
                             style={
