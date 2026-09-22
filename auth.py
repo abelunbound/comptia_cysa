@@ -7,9 +7,9 @@ Cloud Run with Cloud SQL. Passwords are hashed with bcrypt (never reversible).
 import os
 from datetime import datetime
 
+import bcrypt
 from flask_login import UserMixin
 from flask_sqlalchemy import SQLAlchemy
-from werkzeug.security import check_password_hash, generate_password_hash
 
 db = SQLAlchemy()
 
@@ -26,12 +26,13 @@ class User(db.Model, UserMixin):
     is_active = db.Column(db.Boolean, default=True, nullable=False)
 
     def set_password(self, password):
-        """Hash and store a password using bcrypt (via werkzeug)."""
-        self.password_hash = generate_password_hash(password, method="pbkdf2:sha256")
+        """Hash and store a password using bcrypt."""
+        salt = bcrypt.gensalt()
+        self.password_hash = bcrypt.hashpw(password.encode('utf-8'), salt).decode('utf-8')
 
     def check_password(self, password):
-        """Verify a password against the stored hash."""
-        return check_password_hash(self.password_hash, password)
+        """Verify a password against the stored bcrypt hash."""
+        return bcrypt.checkpw(password.encode('utf-8'), self.password_hash.encode('utf-8'))
 
     def __repr__(self):
         return f"<User {self.email}>"
