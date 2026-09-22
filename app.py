@@ -40,12 +40,22 @@ server.config["SECRET_KEY"] = secret_key
 server.config["SQLALCHEMY_DATABASE_URI"] = get_database_url()
 server.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Security: SESSION_COOKIE_SECURE must be True in production to enforce HTTPS-only
-# cookies. Flask's server.debug is False by default when served via gunicorn (Cloud
-# Run), ensuring secure cookies are enabled. The debug=True in __main__ below only
-# affects local `python app.py` dev runs.
+# Security: SESSION_COOKIE_SECURE defaults to True (HTTPS-only) for production.
+# For local HTTP testing (http://127.0.0.1:8050), set SESSION_COOKIE_SECURE=false.
+# Production (Cloud Run) should always use Secure=True (HTTPS).
+secure_cookie_env = os.environ.get("SESSION_COOKIE_SECURE")
+if secure_cookie_env is not None:
+    # Explicit env override
+    server.config["SESSION_COOKIE_SECURE"] = secure_cookie_env.lower() in ("true", "1", "yes")
+else:
+    # Default: False for local dev (FLASK_DEBUG=1 or development), True for prod
+    is_dev = (
+        os.environ.get("FLASK_DEBUG") == "1" or
+        os.environ.get("ENV") == "development"
+    )
+    server.config["SESSION_COOKIE_SECURE"] = not is_dev
+
 server.config["SESSION_COOKIE_HTTPONLY"] = True
-server.config["SESSION_COOKIE_SECURE"] = not server.debug
 server.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 server.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 1 day in seconds
 

@@ -32,7 +32,17 @@ pages. Set up authentication as follows:
    set SECRET_KEY=your-generated-secret-key-here
    ```
 
-3. **(Optional) Configure database URL** for production. By default, the app
+3. **For local HTTP development** (http://127.0.0.1:8050), set:
+   ```bash
+   export SESSION_COOKIE_SECURE=false
+   ```
+   
+   **IMPORTANT**: Do NOT set `SESSION_COOKIE_SECURE=false` in production.
+   Production (Cloud Run with HTTPS) should always use secure cookies (this is
+   the default). Without this setting locally, your browser won't keep the
+   session cookie over HTTP.
+
+4. **(Optional) Configure database URL** for production. By default, the app
    uses SQLite (`instance/users.db`) for local development. For Cloud Run
    with Cloud SQL, set:
    ```bash
