@@ -43,7 +43,13 @@ def get_database_url():
     Cloud Run deployments should set DATABASE_URL to a Cloud SQL connection
     string. Local dev falls back to SQLite stored in instance/users.db.
     """
-    return os.environ.get("DATABASE_URL", "sqlite:///instance/users.db")
+    # Use absolute path for SQLite to avoid issues with relative paths
+    default_db = os.environ.get("DATABASE_URL")
+    if not default_db:
+        instance_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance")
+        os.makedirs(instance_dir, exist_ok=True)
+        default_db = f"sqlite:///{os.path.join(instance_dir, 'users.db')}"
+    return default_db
 
 
 def init_auth(app):
