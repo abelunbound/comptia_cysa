@@ -3,6 +3,7 @@
 import dash
 import plotly.graph_objects as go
 from dash import Input, Output, dcc, html
+from flask_login import current_user
 
 from components.shell import shell
 from components.ui import (
@@ -18,7 +19,16 @@ from components.ui import (
 
 dash.register_page(__name__, path="/results", name="Results")
 
-layout = shell(html.Div(id="results-container"))
+
+def layout(**kwargs):
+    """Layout function: check auth and return results or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return shell(html.Div())
+    
+    # Access exam history from dcc.Store - we need to handle this differently
+    # Since we can't access stores in layout functions, return a container
+    # that will be populated by a callback
+    return shell(html.Div(id="results-container"))
 
 
 def _empty_state():
@@ -199,13 +209,11 @@ def _progress_section(history):
 
 @dash.callback(
     Output("results-container", "children"),
-    Input("_pages_location", "pathname"),
     Input("exam-history-store", "data"),
+    prevent_initial_call=True,
 )
-def render_results(pathname, history):
-    if pathname != "/results":
-        return dash.no_update
-
+def render_results(history):
+    """Render results content based on exam history."""
     if not history:
         return _empty_state()
 

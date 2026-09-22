@@ -5,6 +5,7 @@ from urllib.parse import parse_qs
 
 import dash
 from dash import ALL, Input, Output, State, dcc, html
+from flask_login import current_user
 
 from components.shell import shell
 from components.ui import (
@@ -23,14 +24,20 @@ dash.register_page(__name__, path="/review", name="Review")
 
 QUESTIONS_PER_PAGE = 10
 
-layout = shell(
-    html.Div(
-        [
-            dcc.Store(id="review-page-store", data=0),
-            html.Div(id="review-container"),
-        ]
+
+def layout(**kwargs):
+    """Layout function: check auth and return review UI or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return shell(html.Div())
+    
+    return shell(
+        html.Div(
+            [
+                dcc.Store(id="review-page-store", data=0),
+                html.Div(id="review-container"),
+            ]
+        )
     )
-)
 
 
 def _empty_state():
@@ -294,15 +301,13 @@ def change_review_page(
 
 @dash.callback(
     Output("review-container", "children"),
-    Input("_pages_location", "pathname"),
     Input("_pages_location", "search"),
     Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
+    prevent_initial_call=True,
 )
-def render_review(pathname, search, history, page):
-    if pathname != "/review":
-        return dash.no_update
-
+def render_review(search, history, page):
+    """Render review content based on exam history and page number."""
     if not history:
         return _empty_state()
 

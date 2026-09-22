@@ -3,13 +3,27 @@
 This page intentionally uses placeholder data throughout -- the app has no
 multi-user backend yet, so nothing here is wired to real state. It exists to
 demonstrate the target layout for a future, fully-functional admin area.
+
+SECURITY NOTE (M1): Currently accessible to any logged-in user. Role-based access
+control (admin vs. regular user) will be added in a future milestone. Residual
+risk: authenticated users can view this mock dashboard, which contains no real data.
 """
 
 import dash
 import plotly.graph_objects as go
-from dash import dcc, html
+from dash import Input, Output, dcc, html
+from flask_login import current_user
 
 dash.register_page(__name__, path="/admin", name="Admin")
+
+
+def layout(**kwargs):
+    """Layout function: check auth and return admin dashboard or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return html.Div()
+    
+    return _admin_dashboard()
+
 
 NAV_ITEMS = [
     ("Dashboard", True),
@@ -189,65 +203,67 @@ def _results_table():
     )
 
 
-layout = html.Div(
-    style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
-    children=[
-        _sidebar(),
-        html.Div(
-            style={"flex": 1, "padding": "32px", "backgroundColor": "#f9fafb"},
-            children=[
-                html.Div(
-                    [
-                        html.H2("Good Morning", style={"margin": 0}),
-                        html.P(
-                            "This is a static preview of a future admin dashboard.",
-                            style={"color": "#6b7280"},
-                        ),
-                    ],
-                    style={"marginBottom": "24px"},
-                ),
-                html.Div(
-                    style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
-                    children=[_stat_card(card) for card in STAT_CARDS],
-                ),
-                html.Div(
-                    style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
-                    children=[
-                        html.Div(
-                            _exam_taken_chart(),
-                            style={
-                                "flex": 3,
-                                "backgroundColor": "white",
-                                "border": "1px solid #e5e7eb",
-                                "borderRadius": "10px",
-                                "padding": "12px",
-                            },
-                        ),
-                        html.Div(
-                            _average_results_chart(),
-                            style={
-                                "flex": 2,
-                                "backgroundColor": "white",
-                                "border": "1px solid #e5e7eb",
-                                "borderRadius": "10px",
-                                "padding": "12px",
-                            },
-                        ),
-                    ],
-                ),
-                html.Div(
-                    style={
-                        "backgroundColor": "white",
-                        "border": "1px solid #e5e7eb",
-                        "borderRadius": "10px",
-                        "padding": "20px",
-                    },
-                    children=[
-                        html.H3("Browse Test Results", style={"marginTop": 0}),
-                        _results_table(),
-                    ],
-                ),
-            ],
-        ),
-    ],
-)
+def _admin_dashboard():
+    """Return the admin dashboard UI."""
+    return html.Div(
+        style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
+        children=[
+            _sidebar(),
+            html.Div(
+                style={"flex": 1, "padding": "32px", "backgroundColor": "#f9fafb"},
+                children=[
+                    html.Div(
+                        [
+                            html.H2("Good Morning", style={"margin": 0}),
+                            html.P(
+                                "This is a static preview of a future admin dashboard.",
+                                style={"color": "#6b7280"},
+                            ),
+                        ],
+                        style={"marginBottom": "24px"},
+                    ),
+                    html.Div(
+                        style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
+                        children=[_stat_card(card) for card in STAT_CARDS],
+                    ),
+                    html.Div(
+                        style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
+                        children=[
+                            html.Div(
+                                _exam_taken_chart(),
+                                style={
+                                    "flex": 3,
+                                    "backgroundColor": "white",
+                                    "border": "1px solid #e5e7eb",
+                                    "borderRadius": "10px",
+                                    "padding": "12px",
+                                },
+                            ),
+                            html.Div(
+                                _average_results_chart(),
+                                style={
+                                    "flex": 2,
+                                    "backgroundColor": "white",
+                                    "border": "1px solid #e5e7eb",
+                                    "borderRadius": "10px",
+                                    "padding": "12px",
+                                },
+                            ),
+                        ],
+                    ),
+                    html.Div(
+                        style={
+                            "backgroundColor": "white",
+                            "border": "1px solid #e5e7eb",
+                            "borderRadius": "10px",
+                            "padding": "20px",
+                        },
+                        children=[
+                            html.H3("Browse Test Results", style={"marginTop": 0}),
+                            _results_table(),
+                        ],
+                    ),
+                ],
+            ),
+        ],
+    )

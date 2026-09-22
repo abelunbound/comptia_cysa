@@ -5,6 +5,7 @@ from datetime import datetime
 
 import dash
 from dash import ALL, Input, Output, State, dcc, html
+from flask_login import current_user
 
 from components.shell import shell
 from components.ui import (
@@ -92,8 +93,17 @@ def _page_buttons(total, current_idx):
     return buttons
 
 
-layout = shell(
-    html.Div(
+def layout(**kwargs):
+    """Layout function: check auth and return full UI or empty (Flask handles redirect)."""
+    if not current_user.is_authenticated:
+        return shell(html.Div())  # Flask before_request redirects; this won't paint
+    
+    return shell(_exam_ui())
+
+
+def _exam_ui():
+    """Return the full exam UI (intro banner + setup/exam sections)."""
+    return html.Div(
         [
             html.Div(
                 style={**INTRO_CARD_STYLE, "marginBottom": "28px"},
@@ -350,7 +360,6 @@ layout = shell(
             ),
         ]
     )
-)
 
 
 @dash.callback(
@@ -502,6 +511,7 @@ def jump_to_question(_all_clicks, data):
     Output("exam-timer-label", "children"),
     Input("exam-timer-interval", "n_intervals"),
     State("exam-session-store", "data"),
+    prevent_initial_call=True,
 )
 def update_timer(_n_intervals, data):
     """Show how long the candidate has spent on the current exam attempt."""
@@ -549,6 +559,7 @@ def update_timer(_n_intervals, data):
     Output("score-ring", "figure"),
     Output("page-number-buttons", "children"),
     Input("exam-session-store", "data"),
+    prevent_initial_call=True,
 )
 def render_exam(data):
     """Show the setup form or the current exam question, based on session state."""
