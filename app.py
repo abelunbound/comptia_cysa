@@ -18,17 +18,18 @@ import os
 
 import dash
 from dash import Dash, dcc, html
-from flask import redirect, request
-from flask_login import LoginManager, current_user
+from flask import Flask, redirect, render_template, request
+from flask_login import LoginManager, current_user, login_user, logout_user
 from flask_wtf.csrf import CSRFProtect
 
-from auth import User, get_database_url, init_auth
+from auth import User, authenticate_user, create_user, get_database_url, init_auth
 
-app = Dash(__name__, use_pages=True, suppress_callback_exceptions=True)
-app.title = "CySA+ Domain Practice Exam"
-server = app.server
+# Create Flask first and wire Flask-Login BEFORE Dash imports pages.
+# Dash(use_pages=True) loads pages/*/layout functions that call current_user;
+# if LoginManager is not on the server yet, that raises:
+#   AttributeError: 'Flask' object has no attribute 'login_manager'
+server = Flask(__name__)
 
-# Flask server configuration for secure sessions and authentication
 secret_key = os.environ.get("SECRET_KEY")
 if not secret_key:
     raise RuntimeError(
@@ -40,18 +41,15 @@ server.config["SECRET_KEY"] = secret_key
 server.config["SQLALCHEMY_DATABASE_URI"] = get_database_url()
 server.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
-# Security: SESSION_COOKIE_SECURE defaults to True (HTTPS-only) for production.
+# SESSION_COOKIE_SECURE defaults to True (HTTPS-only) for production.
 # For local HTTP testing (http://127.0.0.1:8050), set SESSION_COOKIE_SECURE=false.
-# Production (Cloud Run) should always use Secure=True (HTTPS).
 secure_cookie_env = os.environ.get("SESSION_COOKIE_SECURE")
 if secure_cookie_env is not None:
-    # Explicit env override
     server.config["SESSION_COOKIE_SECURE"] = secure_cookie_env.lower() in ("true", "1", "yes")
 else:
-    # Default: False for local dev (FLASK_DEBUG=1 or development), True for prod
     is_dev = (
-        os.environ.get("FLASK_DEBUG") == "1" or
-        os.environ.get("ENV") == "development"
+        os.environ.get("FLASK_DEBUG") == "1"
+        or os.environ.get("ENV") == "development"
     )
     server.config["SESSION_COOKIE_SECURE"] = not is_dev
 
@@ -59,10 +57,8 @@ server.config["SESSION_COOKIE_HTTPONLY"] = True
 server.config["SESSION_COOKIE_SAMESITE"] = "Lax"
 server.config["PERMANENT_SESSION_LIFETIME"] = 86400  # 1 day in seconds
 
-# Initialize authentication
 init_auth(server)
 
-# Flask-Login setup
 login_manager = LoginManager()
 login_manager.init_app(server)
 login_manager.login_view = "/login"
@@ -74,33 +70,21 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# CSRF protection for state-changing requests (Flask forms only, not Dash endpoints)
-# Configure CSRF to exempt Dash internal endpoints
-server.config["WTF_CSRF_CHECK_DEFAULT"] = False  # Disable automatic CSRF on all views
+# CSRF: Flask forms only, not Dash AJAX endpoints
+server.config["WTF_CSRF_CHECK_DEFAULT"] = False
 csrf = CSRFProtect(server)
 
 
 def csrf_protect():
     """Protect Flask form routes with CSRF, but not Dash endpoints."""
-    # Skip CSRF for Dash internal AJAX endpoints
     if request.path.startswith("/_dash"):
         return
-    # Skip CSRF for public GET requests
     if request.method == "GET":
         return
-    # Protect POST requests to Flask routes (signup, login)
     csrf.protect()
 
 
-# Apply CSRF protection before each request
 server.before_request(csrf_protect)
-
-
-# Flask routes for authentication (plain HTML forms, not Dash pages)
-from flask import render_template
-from flask_login import login_user, logout_user
-
-from auth import authenticate_user, create_user
 
 
 @server.route("/signup", methods=["GET", "POST"])
@@ -109,14 +93,14 @@ def signup():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
-        
+
         user, error = create_user(email, password)
         if error:
             return render_template("signup.html", error=error)
-        
+
         login_user(user)
         return redirect("/")
-    
+
     return render_template("signup.html")
 
 
@@ -126,14 +110,14 @@ def login():
     if request.method == "POST":
         email = request.form.get("email", "").strip()
         password = request.form.get("password", "")
-        
+
         user = authenticate_user(email, password)
         if not user:
             return render_template("login.html", error="Invalid email or password.")
-        
+
         login_user(user)
         return redirect("/")
-    
+
     return render_template("login.html")
 
 
@@ -144,28 +128,33 @@ def logout():
     return redirect("/login")
 
 
-# HTTP-level page-load protection: redirect unauthenticated users before any UI renders
 @server.before_request
 def require_login():
     """Redirect unauthenticated users to /login for protected routes.
-    
+
     Protected routes: /, /results, /review, /admin
     Public routes: /login, /signup, /logout, /assets/*, /_dash-*, /_reload-hash
     """
-    # Allow public authentication routes
     if request.path in ("/login", "/signup", "/logout"):
         return None
-    
-    # Allow Dash internal routes and static assets
+
     if request.path.startswith(("/_dash-", "/assets/", "/_reload-hash")):
         return None
-    
-    # Protect all other routes (/, /results, /review, /admin, etc.)
+
     if not current_user.is_authenticated:
         return redirect("/login")
-    
+
     return None
 
+
+# Dash mounts on the already-configured Flask server (pages can safely use current_user)
+app = Dash(
+    __name__,
+    server=server,
+    use_pages=True,
+    suppress_callback_exceptions=True,
+)
+app.title = "CySA+ Domain Practice Exam"
 
 app.layout = html.Div(
     [
@@ -177,6 +166,5 @@ app.layout = html.Div(
 
 if __name__ == "__main__":
     # Local development only: debug=True enables auto-reload and detailed errors.
-    # IMPORTANT: Production (Cloud Run) uses gunicorn via Dockerfile, which never
-    # executes this block and keeps debug=False, ensuring SESSION_COOKIE_SECURE=True.
+    # Production (Cloud Run) uses gunicorn via Dockerfile and never executes this block.
     app.run(debug=True)
