@@ -295,26 +295,26 @@ def change_review_page(
 
 @dash.callback(
     Output("review-container", "children"),
-    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
     Input("_pages_location", "search"),
     Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
-    prevent_initial_call=True,
 )
 def render_review(pathname, search, history, page):
+    """Render review if authenticated (Flask before_request handles redirect)."""
     if pathname != "/review":
-        return dash.no_update, dash.no_update
+        return dash.no_update
 
+    # Flask before_request already redirected unauthenticated users
     if not current_user.is_authenticated:
-        return dash.no_update, "/login"
+        return html.Div()
 
     if not history:
-        return _empty_state(), dash.no_update
+        return _empty_state()
 
     attempt = _current_attempt(history, search)
     if not attempt:
-        return _empty_state(), dash.no_update
+        return _empty_state()
 
     questions = attempt["questions"]
     answers = attempt["answers"]
@@ -370,4 +370,4 @@ def render_review(pathname, search, history, page):
                 children=body_children,
             ),
         ]
-    ), dash.no_update
+    )

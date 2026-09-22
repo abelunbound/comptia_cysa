@@ -199,17 +199,16 @@ layout = html.Div(id="admin-container")
 
 @dash.callback(
     Output("admin-container", "children"),
-    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
-    prevent_initial_call=True,
 )
 def render_admin(pathname):
-    """Protect admin page - require authentication."""
+    """Render admin dashboard if authenticated (Flask before_request handles redirect)."""
     if pathname != "/admin":
-        return dash.no_update, dash.no_update
+        return dash.no_update
 
+    # Flask before_request already redirected unauthenticated users
     if not current_user.is_authenticated:
-        return dash.no_update, "/login"
+        return html.Div()
 
     return html.Div(
         style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
@@ -272,4 +271,4 @@ def render_admin(pathname):
                 ],
             ),
         ],
-    ), dash.no_update
+    )

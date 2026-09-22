@@ -1,16 +1,19 @@
 """Logout page ('/logout'): clear session and redirect to login."""
 
 import dash
-from dash import Input, Output, html
+from dash import Input, Output, dcc, html
 from flask_login import logout_user
 
 dash.register_page(__name__, path="/logout", name="Log Out")
 
-layout = html.Div(id="logout-container")
+layout = html.Div([
+    dcc.Location(id="logout-redirect", refresh=True),
+    html.Div(id="logout-container"),
+])
 
 
 @dash.callback(
-    Output("_pages_location", "pathname", allow_duplicate=True),
+    Output("logout-redirect", "href"),
     Input("_pages_location", "pathname"),
     prevent_initial_call=True,
 )

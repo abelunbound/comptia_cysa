@@ -200,20 +200,20 @@ def _progress_section(history):
 
 @dash.callback(
     Output("results-container", "children"),
-    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
     Input("exam-history-store", "data"),
-    prevent_initial_call=True,
 )
 def render_results(pathname, history):
+    """Render results if authenticated (Flask before_request handles redirect)."""
     if pathname != "/results":
-        return dash.no_update, dash.no_update
+        return dash.no_update
 
+    # Flask before_request already redirected unauthenticated users
     if not current_user.is_authenticated:
-        return dash.no_update, "/login"
+        return html.Div()
 
     if not history:
-        return _empty_state(), dash.no_update
+        return _empty_state()
 
     featured = history[-1]
 
@@ -229,4 +229,4 @@ def render_results(pathname, history):
                 ],
             ),
         ]
-    ), dash.no_update
+    )

@@ -360,19 +360,19 @@ def _exam_ui():
 
 @dash.callback(
     Output("exam-container", "children"),
-    Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
-    prevent_initial_call="initial_duplicate",
 )
 def render_exam_page(pathname):
-    """Page-load auth gate: redirect to login if not authenticated, else render exam UI."""
+    """Render exam UI if authenticated (Flask before_request handles redirect)."""
     if pathname != "/":
-        return dash.no_update, dash.no_update
+        return dash.no_update
     
+    # Flask before_request already redirected unauthenticated users.
+    # If we're here, user is authenticated; render the exam UI.
     if not current_user.is_authenticated:
-        return dash.no_update, "/login"
+        return html.Div()  # Belt-and-suspenders empty div
     
-    return _exam_ui(), dash.no_update
+    return _exam_ui()
 
 
 @dash.callback(
