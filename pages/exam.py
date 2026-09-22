@@ -362,7 +362,7 @@ def _exam_ui():
     Output("exam-container", "children"),
     Output("_pages_location", "pathname", allow_duplicate=True),
     Input("_pages_location", "pathname"),
-    prevent_initial_call=False,
+    prevent_initial_call="initial_duplicate",
 )
 def render_exam_page(pathname):
     """Page-load auth gate: redirect to login if not authenticated, else render exam UI."""
