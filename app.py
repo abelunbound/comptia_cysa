@@ -68,6 +68,54 @@ def load_user(user_id):
 csrf = CSRFProtect(server)
 
 
+# Flask routes for authentication (plain HTML forms, not Dash pages)
+from flask import render_template
+from flask_login import login_user, logout_user
+
+from auth import authenticate_user, create_user
+
+
+@server.route("/signup", methods=["GET", "POST"])
+def signup():
+    """Sign up page with email/password form."""
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        
+        user, error = create_user(email, password)
+        if error:
+            return render_template("signup.html", error=error)
+        
+        login_user(user)
+        return redirect("/")
+    
+    return render_template("signup.html")
+
+
+@server.route("/login", methods=["GET", "POST"])
+def login():
+    """Log in page with email/password form."""
+    if request.method == "POST":
+        email = request.form.get("email", "").strip()
+        password = request.form.get("password", "")
+        
+        user = authenticate_user(email, password)
+        if not user:
+            return render_template("login.html", error="Invalid email or password.")
+        
+        login_user(user)
+        return redirect("/")
+    
+    return render_template("login.html")
+
+
+@server.route("/logout")
+def logout():
+    """Log out and redirect to login page."""
+    logout_user()
+    return redirect("/login")
+
+
 # HTTP-level page-load protection: redirect unauthenticated users before any UI renders
 @server.before_request
 def require_login():

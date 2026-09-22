@@ -65,13 +65,10 @@ def test_smoke_signup_logout_login_protected_access(client):
     response = client.get("/admin", follow_redirects=False)
     assert response.status_code == 200, "Authenticated user should access /admin"
     
-    # Step 5: Logout
-    response = client.get("/logout")
-    assert response.status_code == 200
-    
-    # Clear session manually (clientside callback doesn't execute in test client)
-    with client.session_transaction() as sess:
-        sess.clear()
+    # Step 5: Logout (Flask route redirects to /login)
+    response = client.get("/logout", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.location == "/login"
     
     # Step 6: Verify logged-out user redirected from protected routes
     response = client.get("/", follow_redirects=False)
