@@ -6,5 +6,8 @@ __pycache__/
 .gitignore
 README.md
 cysa_plus_questions.csv
+instance/
+*.db
+.env
 tests/
 e2e/
