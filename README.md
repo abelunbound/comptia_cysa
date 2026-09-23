@@ -76,19 +76,17 @@ To run the test suite locally:
 
 ```bash
 # Install test dependencies
-pip install pytest
+pip install -r requirements.txt
 
-# Run all tests
+# Unit / Flask-client tests
 pytest -v tests/
 
-# Run specific test file
-pytest -v tests/test_auth.py
+# Browser smoke (Playwright). First time: playwright install chromium
+pytest -v e2e/ --browser chromium
 ```
 
-Tests cover:
-- Auth module functions (user creation, password hashing, authentication)
-- Flask `before_request` auth gate (protected route redirects)
-- E2E smoke test (signup → logout → login → protected access)
+`tests/` covers auth helpers and the Flask `before_request` gate. That is not
+browser e2e. `e2e/` is the CI smoke: login → exam UI paints → one Dash click.
 
 **Note**: Tests use temporary SQLite databases and set `SECRET_KEY` automatically.
 
