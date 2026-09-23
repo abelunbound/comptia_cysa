@@ -1,9 +1,7 @@
 """Authentication module: User model, database setup, and auth utilities.
 
-M2: one SQLAlchemy database for auth users and exam questions.
-- Local/tests: SQLite (instance/users.db) when DATABASE_URL is unset.
-- Cloud Run: PostgreSQL via DATABASE_URL (Cloud SQL Unix socket).
-Passwords are hashed with bcrypt (never reversible).
+Users and questions share one PostgreSQL database (DATABASE_URL required).
+SQLite is not supported. Passwords are hashed with bcrypt (never reversible).
 """
 
 import os
@@ -64,18 +62,31 @@ class Question(db.Model):
 
 
 def get_database_url():
-    """Return DATABASE_URL from env if set, else SQLite for local dev.
+    """Return DATABASE_URL. Postgres only — never SQLite.
 
-    Cloud Run (M2+) must set DATABASE_URL to the Cloud SQL Postgres URL
-    (Unix socket host=/cloudsql/PROJECT:REGION:INSTANCE). Local/tests may
-    omit it and use SQLite under instance/users.db.
+    Local (Auth Proxy): postgresql+psycopg2://cysa_app:...@127.0.0.1:5432/cybersecuritylab
+    Staging (Cloud Run): Unix-socket URL from Secret Manager cysa-exam-database-url
+    Tests/CI: ephemeral Postgres via TEST_DATABASE_URL (see tests/conftest.py)
     """
-    database_url = os.environ.get("DATABASE_URL")
-    if database_url:
-        return database_url
-    instance_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "instance")
-    os.makedirs(instance_dir, exist_ok=True)
-    return f"sqlite:///{os.path.join(instance_dir, 'users.db')}"
+    database_url = (os.environ.get("DATABASE_URL") or "").strip()
+    if not database_url:
+        raise RuntimeError(
+            "DATABASE_URL is required (PostgreSQL). "
+            "Local: start Cloud SQL Auth Proxy, then set "
+            "postgresql+psycopg2://cysa_app:<PASSWORD>@127.0.0.1:5432/cybersecuritylab. "
+            "Staging: mount Secret Manager cysa-exam-database-url."
+        )
+    lowered = database_url.lower()
+    if lowered.startswith("sqlite"):
+        raise RuntimeError(
+            "SQLite is not supported. Set DATABASE_URL to a postgresql:// "
+            "or postgresql+psycopg2:// URL."
+        )
+    if not lowered.startswith("postgresql"):
+        raise RuntimeError(
+            "DATABASE_URL must be a postgresql:// or postgresql+psycopg2:// URL."
+        )
+    return database_url
 
 
 def init_auth(app):

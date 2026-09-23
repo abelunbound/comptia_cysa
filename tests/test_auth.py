@@ -1,34 +1,32 @@
 """Unit tests for auth.py: user creation, password hashing, authentication."""
 
 import os
-import tempfile
 
 import bcrypt
 import pytest
 from flask import Flask
 
-from auth import User, authenticate_user, create_user, db, init_auth
+from auth import authenticate_user, create_user, db, init_auth
 
 
 @pytest.fixture
 def test_app():
-    """Create a test Flask app with temporary SQLite database."""
+    """Create a test Flask app on isolated CI Postgres."""
     app = Flask(__name__)
     app.config["SECRET_KEY"] = "test-secret-key"
-    
-    # Use temporary database
-    db_fd, db_path = tempfile.mkstemp()
-    app.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     app.config["TESTING"] = True
-    
+
     init_auth(app)
-    
+    with app.app_context():
+        db.drop_all()
+        db.create_all()
+
     yield app
-    
-    # Cleanup
-    os.close(db_fd)
-    os.unlink(db_path)
+
+    with app.app_context():
+        db.drop_all()
 
 
 @pytest.fixture

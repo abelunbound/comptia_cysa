@@ -35,9 +35,8 @@ Manual steps below match what the script does.
 
 - Mount `SECRET_KEY` from **Secret Manager** (`--update-secrets`). Prefer this
   over plaintext `--set-env-vars` (avoids shell history / accidental commits).
-- Leave `DATABASE_URL` **unset** — the app falls back to SQLite
-  (`instance/users.db`) for M1 smoke only (ephemeral; not durable across
-  revisions/instances).
+- `DATABASE_URL` is **required** (PostgreSQL). Do not omit it — there is no
+  SQLite fallback. Staging mounts Secret Manager `cysa-exam-database-url`.
 - Leave `SESSION_COOKIE_SECURE` **unset** so cookies stay Secure on HTTPS.
 - After the revision is Serving, ping Delivery with the live URL for auth smoke.
 
@@ -118,8 +117,8 @@ export DATABASE_URL="postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:543
 python scripts/seed_questions.py
 ```
 
-`load_questions()` reads the `questions` table whenever `DATABASE_URL` starts
-with `postgresql`. Without that env var (local/tests), it still uses CSV.
+`load_questions()` always reads the `questions` table. CSV is seed-only
+(`scripts/seed_questions.py`) and is not copied into the Cloud Run image.
 
 ## Required Environment Variables
 
@@ -145,10 +144,10 @@ gcloud run services update cysa-exam-app \
   --set-env-vars SECRET_KEY='your-generated-secret-key-here'
 ```
 
-### DATABASE_URL (required on Cloud Run for M2)
+### DATABASE_URL (required)
 
-SQLAlchemy URL for Postgres. **Required** on Cloud Run so questions and users
-are durable. Local/tests may omit it (SQLite for auth, CSV for questions).
+SQLAlchemy URL for Postgres. **Required** everywhere the app starts (local,
+tests, Cloud Run). Missing or SQLite URLs crash at startup.
 
 | | |
 |---|---|
@@ -196,11 +195,11 @@ Never put a real password in this file or in `--set-env-vars`.
 - **`.dockerignore`** keeps the image lean (excludes `venv/`, `__pycache__/`,
   `.git/`, etc).
 - **State**: exam UI session data lives in the browser via
-  `dcc.Store(storage_type="session")`. Auth users live in SQLite (M1) or
-  Postgres (M2+) — see Milestone sections above.
-- **Question bank**: `cysa_plus_questions.csv` is baked into the container
-  image at build time. If you edit the CSV, you must redeploy (rebuild) for
-  the change to go live — it's not read from a live/mounted file.
+  `dcc.Store(storage_type="session")`. Auth users and questions live in
+  Cloud SQL Postgres (`cybersecuritylab`).
+- **Question bank**: seeded into `questions` via `scripts/seed_questions.py`.
+  The CSV is not in the container image. Re-seed through the Auth Proxy after
+  CSV edits; no rebuild required for data-only changes.
 
 ## Redeploying after a code change (routine)
 
@@ -300,13 +299,15 @@ these steps first (all one-time, per-project):
   permissions`** during `gcloud run deploy --source .` → see step 3 above.
 - **Container fails to start / SECRET_KEY required** → Secret Manager mount
   missing; re-run `./scripts/redeploy-cloud-run.sh`.
-- **App loads but data looks stale** → the CSV is baked into the image;
-  redeploy after editing `cysa_plus_questions.csv` or `questions.csv`.
-- **Local sanity check before deploying** — you can verify the production
-  entrypoint works without touching Cloud Run at all:
+- **App loads but data looks stale** → re-seed Postgres
+  (`python scripts/seed_questions.py` via Auth Proxy). CSV is not in the image.
+- **Container fails to start / DATABASE_URL required** → Secret Manager mount
+  missing or SQLite URL; remount `cysa-exam-database-url`.
+- **Local sanity check before deploying** — Auth Proxy + Postgres URL required:
   ```bash
   export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')
   export SESSION_COOKIE_SECURE=false
+  export DATABASE_URL='postgresql+psycopg2://cysa_app:<PASSWORD>@127.0.0.1:5432/cybersecuritylab'
   pip install gunicorn
   PORT=8081 gunicorn --bind 0.0.0.0:8081 app:server
   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081/

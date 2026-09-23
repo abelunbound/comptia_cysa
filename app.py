@@ -16,6 +16,8 @@ browser tab closes):
 
 import os
 
+import load_env  # noqa: F401 — local .env; does not override Cloud Run / CI env
+
 import dash
 from dash import Dash, dcc, html
 from flask import Flask, redirect, render_template, request

@@ -4,7 +4,6 @@ import os
 import socket
 import subprocess
 import sys
-import tempfile
 import time
 import uuid
 from pathlib import Path
@@ -12,6 +11,15 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parent.parent
+sys.path.insert(0, str(ROOT))
+
+DEFAULT_TEST_DATABASE_URL = (
+    "postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test"
+)
+
+
+def _test_database_url():
+    return os.environ.get("TEST_DATABASE_URL") or DEFAULT_TEST_DATABASE_URL
 
 
 def _free_port():
@@ -22,12 +30,17 @@ def _free_port():
 
 @pytest.fixture(scope="session")
 def live_server():
-    """Start gunicorn on a free port with a throwaway SQLite database."""
+    """Start gunicorn on isolated CI Postgres (not staging Cloud SQL)."""
+    from tests.pg_seed import ensure_schema_and_one_question
+
+    database_url = _test_database_url()
+    os.environ["DATABASE_URL"] = database_url
+    ensure_schema_and_one_question(database_url)
+
     port = _free_port()
-    db_path = Path(tempfile.gettempdir()) / f"cysa_e2e_{uuid.uuid4().hex}.db"
     env = os.environ.copy()
     env["SECRET_KEY"] = os.environ.get("SECRET_KEY") or "e2e-playwright-secret-key"
-    env["DATABASE_URL"] = f"sqlite:///{db_path}"
+    env["DATABASE_URL"] = database_url
     env["SESSION_COOKIE_SECURE"] = "false"
     env.pop("FLASK_DEBUG", None)
 
@@ -76,4 +89,3 @@ def live_server():
         proc.wait(timeout=10)
     except subprocess.TimeoutExpired:
         proc.kill()
-    db_path.unlink(missing_ok=True)

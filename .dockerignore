@@ -5,3 +5,6 @@ __pycache__/
 .git/
 .gitignore
 README.md
+cysa_plus_questions.csv
+tests/
+e2e/

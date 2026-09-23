@@ -71,6 +71,35 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cysa_app;
 | `scripts/setup-cross-projects-db.sh` | Cross-account user/IAM/secret/Cloud Run attach. Reads `DB_PASSWORD` from the environment or a prompt. |
 | `scripts/rotate-cysa-app-password.sh` | Rotate `cysa_app`, add a new secret version, refresh Cloud Run. Interactive password prompt. |
 | `scripts/redeploy-cloud-run.sh` | Rebuild/deploy the app with both secrets + the bankpassport connection. |
-| `scripts/seed_questions.py` | CSV → `questions` via Auth Proxy. Does not touch `users`. |
+| `scripts/seed_questions.py` | CSV → `questions` via Auth Proxy. Ops only; not used at runtime. Does not touch `users`. |
+| `scripts/run-local.sh` | Local Dash against Auth Proxy Postgres. Requires `DATABASE_URL`. |
 
 See `docs/M2-CLOUD-SQL.md` for the M2 runbook.
+
+
+## Database access
+The app database user is cysa_app. I generated a new random password so it would match what is in the vault. I did not save it in the repo, chat, or a file you can open in the project.
+
+It lives only in Google Secret Manager, secret name:
+
+```
+cysa-exam-database-url
+project: cybersecuritylab-509321
+latest version: 4
+``` 
+
+That secret is the full connection string (username + password + database name), not a sticky note that says “password = …”.
+
+I will not print it here. To see it yourself in your terminal:
+
+```
+gcloud secrets versions access latest \
+  --secret=cysa-exam-database-url \
+  --project=cybersecuritylab-509321
+```
+
+
+
+The password is the part between cysa_app: and @/ (it may look like %21 for ! because it is URL-encoded).
+
+Passwords you typed earlier (including in the Mac dialogs) no longer work. Cloud Run already uses the vault, so the site does not need you to remember it unless you seed or connect by hand again.

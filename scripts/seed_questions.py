@@ -23,6 +23,7 @@ ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 if ROOT not in sys.path:
     sys.path.insert(0, ROOT)
 
+import load_env  # noqa: E402, F401 — local .env before DATABASE_URL is read
 from auth import Question, db, get_database_url  # noqa: E402
 
 CSV_PATH = os.path.join(ROOT, "cysa_plus_questions.csv")

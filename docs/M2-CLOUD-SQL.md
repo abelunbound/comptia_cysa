@@ -80,8 +80,17 @@ pip install -r requirements.txt
 python scripts/seed_questions.py
 ```
 
-CSV is used **only** for this seed. Cloud Run runtime loads questions via
-`load_questions()` from Postgres (no CSV dependency).
+CSV is used **only** for this seed. Runtime (`python app.py` and Cloud Run)
+loads questions via `load_questions()` from Postgres only. SQLite is not
+supported. Local app:
+
+```bash
+export DATABASE_URL="postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:5432/cybersecuritylab"
+export SESSION_COOKIE_SECURE=false
+./scripts/run-local.sh
+```
+
+Tests use an ephemeral `cysa_test` Postgres (CI service), not this database.
 
 ## Redeploy (M2)
 

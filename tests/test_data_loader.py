@@ -1,11 +1,10 @@
-"""Tests for load_questions data seam (CSV local path + Postgres contract)."""
+"""Tests for load_questions Postgres DataFrame contract."""
 
 import pandas as pd
+import pytest
 
 from data_loader import REQUIRED_COLUMNS, load_questions
 
-# Columns the exam UI reads (pages/exam.py). Must stay stable if the source
-# switches from CSV to the questions table.
 EXAM_UI_COLUMNS = {
     "Domain",
     "Sub-Section",
@@ -20,32 +19,50 @@ EXAM_UI_COLUMNS = {
 }
 
 
-def test_load_questions_csv_has_required_columns(monkeypatch):
-    """Without DATABASE_URL, load_questions uses CSV/fallback with required cols."""
+def test_load_questions_rejects_missing_or_sqlite_url(monkeypatch):
     monkeypatch.delenv("DATABASE_URL", raising=False)
-    df = load_questions()
-    assert not df.empty
-    assert REQUIRED_COLUMNS.issubset(set(df.columns))
-    assert EXAM_UI_COLUMNS.issubset(set(df.columns))
-
-
-def test_load_questions_postgres_flag(monkeypatch):
-    """_uses_postgres is driven by DATABASE_URL scheme only."""
-    from data_loader import _uses_postgres
-
-    monkeypatch.delenv("DATABASE_URL", raising=False)
-    assert _uses_postgres() is False
+    with pytest.raises(RuntimeError, match="postgresql"):
+        load_questions()
     monkeypatch.setenv("DATABASE_URL", "sqlite:///tmp.db")
-    assert _uses_postgres() is False
+    with pytest.raises(RuntimeError, match="postgresql"):
+        load_questions()
+
+
+def test_load_questions_raises_when_query_fails(monkeypatch):
     monkeypatch.setenv(
         "DATABASE_URL",
-        "postgresql+psycopg2://u:p@/db?host=/cloudsql/x:y:z",
+        "postgresql+psycopg2://u:p@127.0.0.1:1/missing",
     )
-    assert _uses_postgres() is True
+    with pytest.raises(RuntimeError, match="Could not load questions"):
+        load_questions()
+
+
+def test_load_questions_raises_when_table_empty(monkeypatch):
+    empty = pd.DataFrame()
+
+    class _FakeConn:
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    class _FakeEngine:
+        def connect(self):
+            return _FakeConn()
+
+    monkeypatch.setenv(
+        "DATABASE_URL",
+        "postgresql+psycopg2://u:p@/cybersecuritylab?host=/cloudsql/x:y:z",
+    )
+    monkeypatch.setattr("data_loader.create_engine", lambda _url: _FakeEngine())
+    monkeypatch.setattr("data_loader.pd.read_sql", lambda *_a, **_k: empty)
+    with pytest.raises(RuntimeError, match="empty or malformed"):
+        load_questions()
 
 
 def test_load_questions_postgres_keeps_exam_dataframe_contract(monkeypatch):
-    """Postgres path aliases snake_case columns to the exam UI CSV names."""
+    """Postgres path aliases snake_case columns to the exam UI names."""
     db_rows = pd.DataFrame(
         [
             {
@@ -85,8 +102,8 @@ def test_load_questions_postgres_keeps_exam_dataframe_contract(monkeypatch):
     assert list(df["Domain"]) == ["1.0 Security Operations"]
     assert list(df["Sub-Section"]) == ["1.1 Explain concepts"]
     assert list(df["Correct Answer"]) == ["B"]
+    assert REQUIRED_COLUMNS.issubset(set(df.columns))
     assert EXAM_UI_COLUMNS.issubset(set(df.columns))
-    # Exam start_exam filters on these two columns then to_dict("records").
     pool = df[
         (df["Domain"] == "1.0 Security Operations")
         & (df["Sub-Section"] == "1.1 Explain concepts")

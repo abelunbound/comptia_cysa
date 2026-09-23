@@ -1,8 +1,19 @@
-"""pytest configuration: add workspace root to Python path for imports."""
+"""pytest configuration: isolated CI Postgres, never staging Cloud SQL."""
 
+import os
 import sys
 from pathlib import Path
 
-# Add workspace root to Python path so tests can import app, auth, etc.
 workspace_root = Path(__file__).parent.parent
 sys.path.insert(0, str(workspace_root))
+
+DEFAULT_TEST_DATABASE_URL = (
+    "postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test"
+)
+# Always isolate tests — do not inherit a developer's staging DATABASE_URL.
+os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or DEFAULT_TEST_DATABASE_URL
+os.environ.setdefault("SECRET_KEY", "test-secret-key-for-client")
+
+from tests.pg_seed import ensure_schema_and_one_question  # noqa: E402
+
+ensure_schema_and_one_question(os.environ["DATABASE_URL"])
