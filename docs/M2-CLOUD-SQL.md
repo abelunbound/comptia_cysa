@@ -2,15 +2,19 @@
 
 M2 puts **auth users and exam questions** on one Cloud SQL Postgres database.
 Cloud Run requires `DATABASE_URL` (Secret Manager) and a Cloud SQL connection.
-See also `scripts/redeploy-cloud-run.sh`.
+See also `docs/database.md` and `scripts/redeploy-cloud-run.sh`.
+
+Do **not** create a new instance named `cysa-exam-sql` or a database named
+`cysa_exam`. Those were the original M2 placeholders. The live instance is
+the existing shared `bankpassport` instance.
 
 | | |
 |---|---|
-| **Instance** | `cysa-exam-sql` |
-| **Connection name** | `cybersecuritylab-509321:us-central1:cysa-exam-sql` |
-| **Database** | `cysa_exam` |
+| **Instance** | `bankpassport` (project `bankpassport-be`) |
+| **Connection name** | `bankpassport-be:us-central1:bankpassport` |
+| **Database** | `cybersecuritylab` |
 | **App user** | `cysa_app` (least privilege — not the `postgres` superuser) |
-| **Secrets** | `cysa-exam-secret-key`, `cysa-exam-database-url` |
+| **Secrets** | `cysa-exam-secret-key`, `cysa-exam-database-url` (in `cybersecuritylab-509321`) |
 
 ## Security constraints (required)
 
@@ -27,35 +31,24 @@ See also `scripts/redeploy-cloud-run.sh`.
 3. **`DATABASE_URL` only via Secret Manager** (`cysa-exam-database-url`). Never
    pass it with plaintext `--set-env-vars`.
 
-## One-time: create instance + DB + user
+## One-time: instance side (already exists)
+
+The instance, database, and `cysa_app` user already exist. Cross-project IAM
+and the Secret Manager URL are applied by:
 
 ```bash
-export CLOUDSQL_ROOT_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
-export CLOUDSQL_APP_PASSWORD="$(python3 -c 'import secrets; print(secrets.token_urlsafe(24))')"
-# Save both passwords securely (password manager). Do not commit them.
-
-# Create without opening the world. Do NOT run:
-#   gcloud sql instances patch ... --authorized-networks=0.0.0.0/0
-gcloud sql instances create cysa-exam-sql \
-  --project=cybersecuritylab-509321 \
-  --database-version=POSTGRES_15 \
-  --tier=db-f1-micro \
-  --region=us-central1 \
-  --storage-size=10 \
-  --storage-auto-increase \
-  --availability-type=ZONAL \
-  --root-password="$CLOUDSQL_ROOT_PASSWORD"
-
-gcloud sql databases create cysa_exam --instance=cysa-exam-sql --project=cybersecuritylab-509321
-gcloud sql users create cysa_app --instance=cysa-exam-sql --project=cybersecuritylab-509321 \
-  --password="$CLOUDSQL_APP_PASSWORD"
+# From repo root. Prompts for DB_PASSWORD (or use export DB_PASSWORD=...).
+# Do not put a password in the script or commit it.
+bash scripts/setup-cross-projects-db.sh
 ```
+
+To rotate the app-user password later: `bash scripts/rotate-cysa-app-password.sh`.
 
 After first app connect / `db.create_all()` (or seed), grant least privilege
 (as `postgres` via Auth Proxy):
 
 ```sql
-GRANT CONNECT ON DATABASE cysa_exam TO cysa_app;
+GRANT CONNECT ON DATABASE cybersecuritylab TO cysa_app;
 GRANT USAGE ON SCHEMA public TO cysa_app;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users, questions TO cysa_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cysa_app;
@@ -64,20 +57,25 @@ GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cysa_app;
 
 ## One-time: DATABASE_URL secret (Unix socket for Cloud Run)
 
+`setup-cross-projects-db.sh` writes this secret. Shape only (password from env):
+
 ```bash
-CONN=cybersecuritylab-509321:us-central1:cysa-exam-sql
-URL="postgresql+psycopg2://cysa_app:${CLOUDSQL_APP_PASSWORD}@/cysa_exam?host=/cloudsql/${CONN}"
-echo -n "$URL" | gcloud secrets create cysa-exam-database-url --data-file=- --project=cybersecuritylab-509321
+CONN=bankpassport-be:us-central1:bankpassport
+URL="postgresql+psycopg2://cysa_app:${DB_PASSWORD}@/cybersecuritylab?host=/cloudsql/${CONN}"
+# echo -n "$URL" | gcloud secrets versions add cysa-exam-database-url --data-file=- \
+#   --project=cybersecuritylab-509321
 ```
+
+URL-encode `DB_PASSWORD` if it contains `@ : / ? # &`.
 
 ## One-time: seed questions (Cloud SQL Auth Proxy)
 
 ```bash
 # Terminal A — do not use a public authorized-network hole for this
-cloud-sql-proxy cybersecuritylab-509321:us-central1:cysa-exam-sql --port=5432
+cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432
 
 # Terminal B (repo root)
-export DATABASE_URL="postgresql+psycopg2://cysa_app:${CLOUDSQL_APP_PASSWORD}@127.0.0.1:5432/cysa_exam"
+export DATABASE_URL="postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:5432/cybersecuritylab"
 pip install -r requirements.txt
 python scripts/seed_questions.py
 ```
@@ -88,10 +86,11 @@ CSV is used **only** for this seed. Cloud Run runtime loads questions via
 ## Redeploy (M2)
 
 ```bash
-git checkout main && git pull
+git checkout feat/m2-cloud-sql-postgres && git pull
 chmod +x scripts/redeploy-cloud-run.sh
 ./scripts/redeploy-cloud-run.sh
 ```
 
 Mounts `SECRET_KEY` + `DATABASE_URL` from Secret Manager only, attaches
-`--add-cloudsql-instances`, leaves `SESSION_COOKIE_SECURE` unset.
+`--add-cloudsql-instances=bankpassport-be:us-central1:bankpassport`, leaves
+`SESSION_COOKIE_SECURE` unset.

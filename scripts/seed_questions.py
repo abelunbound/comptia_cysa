@@ -3,8 +3,8 @@
 
 Usage (from repo root):
 
-  export DATABASE_URL='postgresql+psycopg2://cysa_app:PASSWORD@/cysa_exam?host=/cloudsql/PROJECT:REGION:INSTANCE'
-  # or local Cloud SQL Auth Proxy: postgresql+psycopg2://cysa_app:PASSWORD@127.0.0.1:5432/cysa_exam
+  export DATABASE_URL='postgresql+psycopg2://cysa_app:PASSWORD@/cybersecuritylab?host=/cloudsql/bankpassport-be:us-central1:bankpassport'
+  # or local Cloud SQL Auth Proxy: postgresql+psycopg2://cysa_app:PASSWORD@127.0.0.1:5432/cybersecuritylab
   python scripts/seed_questions.py
 
 Safe to re-run: clears existing questions rows then re-inserts from CSV.

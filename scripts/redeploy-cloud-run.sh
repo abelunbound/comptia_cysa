@@ -4,10 +4,11 @@
 # Does NOT set SESSION_COOKIE_SECURE (leave Secure cookies on for HTTPS).
 #
 # Prerequisites:
-#   - Cloud SQL instance cysa-exam-sql RUNNABLE
-#   - DB cysa_exam + user cysa_app created
+#   - Shared Cloud SQL instance bankpassport RUNNABLE (project bankpassport-be)
+#   - DB cybersecuritylab + user cysa_app created
 #   - Secret cysa-exam-database-url holding the Unix-socket SQLAlchemy URL
 #   - Questions seeded (python scripts/seed_questions.py via Auth Proxy)
+#   - See docs/database.md and scripts/setup-cross-projects-db.sh
 #
 # Usage (from repo root, after: git checkout main && git pull):
 #   ./scripts/redeploy-cloud-run.sh
@@ -19,10 +20,11 @@ set -euo pipefail
 PROJECT="cybersecuritylab-509321"
 REGION="us-central1"
 SERVICE="cysa-exam-app"
-CLOUDSQL_INSTANCE="cysa-exam-sql"
-CLOUDSQL_CONNECTION="${PROJECT}:${REGION}:${CLOUDSQL_INSTANCE}"
+CLOUDSQL_OWNER_PROJECT="bankpassport-be"
+CLOUDSQL_CONNECTION="bankpassport-be:us-central1:bankpassport"
 SECRET_KEY_NAME="cysa-exam-secret-key"
 DATABASE_URL_SECRET="cysa-exam-database-url"
+DB_NAME="cybersecuritylab"
 SERVICE_URL="https://cysa-exam-app-104739181475.us-central1.run.app"
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -53,11 +55,6 @@ echo "==> Enabling APIs (safe if already on)"
 gcloud services enable secretmanager.googleapis.com sqladmin.googleapis.com \
   --project="$PROJECT" >/dev/null
 
-if ! gcloud sql instances describe "$CLOUDSQL_INSTANCE" --project="$PROJECT" >/dev/null 2>&1; then
-  echo "error: Cloud SQL instance $CLOUDSQL_INSTANCE not found. Create it first (see DEPLOYMENT.md M2)." >&2
-  exit 1
-fi
-
 if gcloud secrets describe "$SECRET_KEY_NAME" --project="$PROJECT" >/dev/null 2>&1; then
   echo "==> Secret $SECRET_KEY_NAME already exists (reusing)"
 else
@@ -69,7 +66,7 @@ fi
 if ! gcloud secrets describe "$DATABASE_URL_SECRET" --project="$PROJECT" >/dev/null 2>&1; then
   echo "error: secret $DATABASE_URL_SECRET missing." >&2
   echo "Create it with the Unix-socket URL, e.g.:" >&2
-  echo "  postgresql+psycopg2://cysa_app:APP_PASSWORD@/cysa_exam?host=/cloudsql/${CLOUDSQL_CONNECTION}" >&2
+  echo "  postgresql+psycopg2://cysa_app:APP_PASSWORD@/${DB_NAME}?host=/cloudsql/${CLOUDSQL_CONNECTION}" >&2
   echo "  echo -n 'URL' | gcloud secrets create ${DATABASE_URL_SECRET} --data-file=- --project=${PROJECT}" >&2
   exit 1
 fi
@@ -87,7 +84,10 @@ for SECRET in "$SECRET_KEY_NAME" "$DATABASE_URL_SECRET"; do
     --quiet >/dev/null || true
 done
 
-gcloud projects add-iam-policy-binding "$PROJECT" \
+# Cloud SQL Client must be on the *instance* project (bankpassport-be), not
+# the Cloud Run project. setup-cross-projects-db.sh grants this as the owner;
+# this is a no-op if the current account cannot bind IAM there.
+gcloud projects add-iam-policy-binding "$CLOUDSQL_OWNER_PROJECT" \
   --member="serviceAccount:${RUNTIME_SA}" \
   --role=roles/cloudsql.client \
   --quiet >/dev/null || true
