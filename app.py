@@ -42,6 +42,12 @@ if not secret_key:
 server.config["SECRET_KEY"] = secret_key
 server.config["SQLALCHEMY_DATABASE_URI"] = get_database_url()
 server.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+# Cloud SQL / Auth Proxy drop idle sockets; ping before reuse so
+# Flask-Login user_loader does not 500 the Dash page callback.
+server.config["SQLALCHEMY_ENGINE_OPTIONS"] = {
+    "pool_pre_ping": True,
+    "pool_recycle": 300,
+}
 
 # SESSION_COOKIE_SECURE defaults to True (HTTPS-only) for production.
 # For local HTTP testing (http://127.0.0.1:8050), set SESSION_COOKIE_SECURE=false.

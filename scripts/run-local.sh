@@ -35,8 +35,24 @@ fi
 
 if ! python3 -c 'import socket; s=socket.create_connection(("127.0.0.1", 5432), 1); s.close()' 2>/dev/null; then
   echo "error: nothing is listening on 127.0.0.1:5432." >&2
-  echo "Start the Auth Proxy first:" >&2
-  echo "  cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432" >&2
+  echo "Start the Auth Proxy in another terminal:" >&2
+  echo "  /tmp/cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432" >&2
+  echo "  # or: \$HOME/bin/cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432" >&2
+  exit 1
+fi
+
+if ! python3 -c "
+import os
+from sqlalchemy import create_engine, text
+engine = create_engine(os.environ['DATABASE_URL'], pool_pre_ping=True)
+with engine.connect() as conn:
+    conn.execute(text('SELECT 1'))
+engine.dispose()
+" 2>/dev/null; then
+  echo "error: 127.0.0.1:5432 accepted TCP but Postgres closed the handshake." >&2
+  echo "The Auth Proxy is probably stale. In another terminal:" >&2
+  echo "  kill \$(lsof -t -iTCP:5432 -sTCP:LISTEN)" >&2
+  echo "  /tmp/cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432" >&2
   exit 1
 fi
 
