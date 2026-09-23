@@ -89,12 +89,37 @@ gcloud run deploy cysa-exam-app \
 Stable URL (unchanged between deploys):
 https://cysa-exam-app-104739181475.us-central1.run.app
 
-### Milestone 2+ (future)
+### Milestone 2 (Cloud SQL + `DATABASE_URL`)
 
-When Cloud SQL / durable `DATABASE_URL` lands in M2, **update this file and
-`scripts/redeploy-cloud-run.sh`** with the correct redeploy steps (Secret
-Manager or Cloud SQL connector for `DATABASE_URL`, no SQLite-on-Cloud-Run
-smoke path). Do not treat the M1 SQLite fallback as production auth storage.
+Questions and auth users share one Postgres database on the existing
+`bankpassport` instance. See `docs/database.md` and `docs/M2-CLOUD-SQL.md`.
+
+**Fast path** (from `feat/m2-cloud-sql-postgres` or `main` after merge):
+
+```bash
+chmod +x scripts/redeploy-cloud-run.sh
+./scripts/redeploy-cloud-run.sh
+```
+
+That mounts **both** secrets and attaches Cloud SQL:
+
+- `SECRET_KEY` ← Secret Manager `cysa-exam-secret-key`
+- `DATABASE_URL` ← Secret Manager `cysa-exam-database-url`
+- `--add-cloudsql-instances=bankpassport-be:us-central1:bankpassport`
+
+Do **not** pass `DATABASE_URL` with `--set-env-vars`.
+
+**Seed questions** (one-time or after CSV changes), via Cloud SQL Auth Proxy:
+
+```bash
+cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432
+# other terminal, password from your password manager — not committed
+export DATABASE_URL="postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:5432/cybersecuritylab"
+python scripts/seed_questions.py
+```
+
+`load_questions()` reads the `questions` table whenever `DATABASE_URL` starts
+with `postgresql`. Without that env var (local/tests), it still uses CSV.
 
 ## Required Environment Variables
 
@@ -120,19 +145,30 @@ gcloud run services update cysa-exam-app \
   --set-env-vars SECRET_KEY='your-generated-secret-key-here'
 ```
 
-### DATABASE_URL (optional for M1; required for durable prod / M2+)
+### DATABASE_URL (required on Cloud Run for M2)
 
-Connection string for Cloud SQL PostgreSQL. For M1, leave unset — the app
-defaults to SQLite. For Cloud SQL later:
+SQLAlchemy URL for Postgres. **Required** on Cloud Run so questions and users
+are durable. Local/tests may omit it (SQLite for auth, CSV for questions).
+
+| | |
+|---|---|
+| Secret | `cysa-exam-database-url` in `cybersecuritylab-509321` |
+| Cloud Run env | `DATABASE_URL` mounted with `--update-secrets` |
+| Shape (Cloud Run / Unix socket) | `postgresql+psycopg2://cysa_app:${DB_PASSWORD}@/cybersecuritylab?host=/cloudsql/bankpassport-be:us-central1:bankpassport` |
+| Shape (local Auth Proxy) | `postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:5432/cybersecuritylab` |
+
+Percent-encode `${DB_PASSWORD}` if it contains reserved URL characters.
 
 ```bash
+# already applied on cysa-exam-app; re-apply after secret rotation:
 gcloud run services update cysa-exam-app \
   --region us-central1 \
   --project cybersecuritylab-509321 \
-  --set-env-vars DATABASE_URL='postgresql://user:password@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE'
+  --add-cloudsql-instances=bankpassport-be:us-central1:bankpassport \
+  --update-secrets=DATABASE_URL=cysa-exam-database-url:latest
 ```
 
-(Prefer Secret Manager for this value in M2 as well.)
+Never put a real password in this file or in `--set-env-vars`.
 
 **Security Notes**:
 - Never commit `SECRET_KEY` or `DATABASE_URL` to the repository. Prefer Secret
