@@ -35,9 +35,8 @@ Manual steps below match what the script does.
 
 - Mount `SECRET_KEY` from **Secret Manager** (`--update-secrets`). Prefer this
   over plaintext `--set-env-vars` (avoids shell history / accidental commits).
-- Leave `DATABASE_URL` **unset** — the app falls back to SQLite
-  (`instance/users.db`) for M1 smoke only (ephemeral; not durable across
-  revisions/instances).
+- `DATABASE_URL` is **required** (PostgreSQL). Do not omit it — there is no
+  SQLite fallback. Staging mounts Secret Manager `cysa-exam-database-url`.
 - Leave `SESSION_COOKIE_SECURE` **unset** so cookies stay Secure on HTTPS.
 - After the revision is Serving, ping Delivery with the live URL for auth smoke.
 
@@ -89,12 +88,37 @@ gcloud run deploy cysa-exam-app \
 Stable URL (unchanged between deploys):
 https://cysa-exam-app-104739181475.us-central1.run.app
 
-### Milestone 2+ (future)
+### Milestone 2 (Cloud SQL + `DATABASE_URL`)
 
-When Cloud SQL / durable `DATABASE_URL` lands in M2, **update this file and
-`scripts/redeploy-cloud-run.sh`** with the correct redeploy steps (Secret
-Manager or Cloud SQL connector for `DATABASE_URL`, no SQLite-on-Cloud-Run
-smoke path). Do not treat the M1 SQLite fallback as production auth storage.
+Questions and auth users share one Postgres database on the existing
+`bankpassport` instance. See `docs/database.md` and `docs/M2-CLOUD-SQL.md`.
+
+**Fast path** (from `feat/m2-cloud-sql-postgres` or `main` after merge):
+
+```bash
+chmod +x scripts/redeploy-cloud-run.sh
+./scripts/redeploy-cloud-run.sh
+```
+
+That mounts **both** secrets and attaches Cloud SQL:
+
+- `SECRET_KEY` ← Secret Manager `cysa-exam-secret-key`
+- `DATABASE_URL` ← Secret Manager `cysa-exam-database-url`
+- `--add-cloudsql-instances=bankpassport-be:us-central1:bankpassport`
+
+Do **not** pass `DATABASE_URL` with `--set-env-vars`.
+
+**Seed questions** (one-time or after CSV changes), via Cloud SQL Auth Proxy:
+
+```bash
+cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432
+# other terminal, password from your password manager — not committed
+export DATABASE_URL="postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:5432/cybersecuritylab"
+python scripts/seed_questions.py
+```
+
+`load_questions()` always reads the `questions` table. CSV is seed-only
+(`scripts/seed_questions.py`) and is not copied into the Cloud Run image.
 
 ## Required Environment Variables
 
@@ -120,19 +144,30 @@ gcloud run services update cysa-exam-app \
   --set-env-vars SECRET_KEY='your-generated-secret-key-here'
 ```
 
-### DATABASE_URL (optional for M1; required for durable prod / M2+)
+### DATABASE_URL (required)
 
-Connection string for Cloud SQL PostgreSQL. For M1, leave unset — the app
-defaults to SQLite. For Cloud SQL later:
+SQLAlchemy URL for Postgres. **Required** everywhere the app starts (local,
+tests, Cloud Run). Missing or SQLite URLs crash at startup.
+
+| | |
+|---|---|
+| Secret | `cysa-exam-database-url` in `cybersecuritylab-509321` |
+| Cloud Run env | `DATABASE_URL` mounted with `--update-secrets` |
+| Shape (Cloud Run / Unix socket) | `postgresql+psycopg2://cysa_app:${DB_PASSWORD}@/cybersecuritylab?host=/cloudsql/bankpassport-be:us-central1:bankpassport` |
+| Shape (local Auth Proxy) | `postgresql+psycopg2://cysa_app:${DB_PASSWORD}@127.0.0.1:5432/cybersecuritylab` |
+
+Percent-encode `${DB_PASSWORD}` if it contains reserved URL characters.
 
 ```bash
+# already applied on cysa-exam-app; re-apply after secret rotation:
 gcloud run services update cysa-exam-app \
   --region us-central1 \
   --project cybersecuritylab-509321 \
-  --set-env-vars DATABASE_URL='postgresql://user:password@/dbname?host=/cloudsql/PROJECT:REGION:INSTANCE'
+  --add-cloudsql-instances=bankpassport-be:us-central1:bankpassport \
+  --update-secrets=DATABASE_URL=cysa-exam-database-url:latest
 ```
 
-(Prefer Secret Manager for this value in M2 as well.)
+Never put a real password in this file or in `--set-env-vars`.
 
 **Security Notes**:
 - Never commit `SECRET_KEY` or `DATABASE_URL` to the repository. Prefer Secret
@@ -160,11 +195,11 @@ gcloud run services update cysa-exam-app \
 - **`.dockerignore`** keeps the image lean (excludes `venv/`, `__pycache__/`,
   `.git/`, etc).
 - **State**: exam UI session data lives in the browser via
-  `dcc.Store(storage_type="session")`. Auth users live in SQLite (M1) or
-  Postgres (M2+) — see Milestone sections above.
-- **Question bank**: `cysa_plus_questions.csv` is baked into the container
-  image at build time. If you edit the CSV, you must redeploy (rebuild) for
-  the change to go live — it's not read from a live/mounted file.
+  `dcc.Store(storage_type="session")`. Auth users and questions live in
+  Cloud SQL Postgres (`cybersecuritylab`).
+- **Question bank**: seeded into `questions` via `scripts/seed_questions.py`.
+  The CSV is not in the container image. Re-seed through the Auth Proxy after
+  CSV edits; no rebuild required for data-only changes.
 
 ## Redeploying after a code change (routine)
 
@@ -264,13 +299,15 @@ these steps first (all one-time, per-project):
   permissions`** during `gcloud run deploy --source .` → see step 3 above.
 - **Container fails to start / SECRET_KEY required** → Secret Manager mount
   missing; re-run `./scripts/redeploy-cloud-run.sh`.
-- **App loads but data looks stale** → the CSV is baked into the image;
-  redeploy after editing `cysa_plus_questions.csv` or `questions.csv`.
-- **Local sanity check before deploying** — you can verify the production
-  entrypoint works without touching Cloud Run at all:
+- **App loads but data looks stale** → re-seed Postgres
+  (`python scripts/seed_questions.py` via Auth Proxy). CSV is not in the image.
+- **Container fails to start / DATABASE_URL required** → Secret Manager mount
+  missing or SQLite URL; remount `cysa-exam-database-url`.
+- **Local sanity check before deploying** — Auth Proxy + Postgres URL required:
   ```bash
   export SECRET_KEY=$(python -c 'import secrets; print(secrets.token_hex(32))')
   export SESSION_COOKIE_SECURE=false
+  export DATABASE_URL='postgresql+psycopg2://cysa_app:<PASSWORD>@127.0.0.1:5432/cybersecuritylab'
   pip install gunicorn
   PORT=8081 gunicorn --bind 0.0.0.0:8081 app:server
   curl -s -o /dev/null -w "%{http_code}\n" http://127.0.0.1:8081/

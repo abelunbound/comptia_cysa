@@ -6,27 +6,80 @@ on:
     branches:
       - main
 
+env:
+  SECRET_KEY: test-ci-secret-key-for-github-actions
+  DATABASE_URL: postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test
+  TEST_DATABASE_URL: postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test
+  SESSION_COOKIE_SECURE: "false"
+
 jobs:
   test:
     runs-on: ubuntu-latest
-    
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: cysa_test
+          POSTGRES_PASSWORD: cysa_test
+          POSTGRES_DB: cysa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cysa_test -d cysa_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
-      
+
       - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
-      
+
       - name: Install dependencies
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
-          pip install pytest
-      
+
       - name: Run tests
+        run: pytest -v tests/
+
+  e2e:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
         env:
-          SECRET_KEY: test-ci-secret-key-for-github-actions
+          POSTGRES_USER: cysa_test
+          POSTGRES_PASSWORD: cysa_test
+          POSTGRES_DB: cysa_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cysa_test -d cysa_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3.12
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
         run: |
-          pytest -v tests/
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Install Chromium for Playwright
+        run: playwright install chromium --with-deps
+
+      - name: Playwright smoke (login → exam → Dash action)
+        run: pytest -v e2e/ --browser chromium

@@ -28,7 +28,14 @@ def layout(**kwargs):
     # Access exam history from dcc.Store - we need to handle this differently
     # Since we can't access stores in layout functions, return a container
     # that will be populated by a callback
-    return shell(html.Div(id="results-container"))
+    return shell(
+        html.Div(
+            [
+                html.Div(id="results-page-ready"),
+                html.Div(id="results-container"),
+            ]
+        )
+    )
 
 
 def _empty_state():
@@ -209,11 +216,11 @@ def _progress_section(history):
 
 @dash.callback(
     Output("results-container", "children"),
+    Input("results-page-ready", "id"),
     Input("exam-history-store", "data"),
-    prevent_initial_call=True,
 )
-def render_results(history):
-    """Render results content based on exam history."""
+def render_results(_ready, history):
+    """Render results on first paint and whenever session history changes."""
     if not history:
         return _empty_state()
 

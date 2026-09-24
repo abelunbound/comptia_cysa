@@ -1,20 +1,15 @@
 """Question data source.
 
-load_questions() is the single seam between the app and its data source.
-Today it reads from a local CSV file and falls back to a hardcoded set of
-questions if the CSV is missing, empty, or malformed. When you're ready to
-move to PostgreSQL, replace the body of load_questions() with a query
-(e.g. via SQLAlchemy/psycopg) that returns a DataFrame with the same
-columns -- no other part of the app needs to change.
+load_questions() is the single seam between the app and the questions table.
+It always reads PostgreSQL via DATABASE_URL and returns a DataFrame with the
+exam UI column names. CSV is seed-only (scripts/seed_questions.py), never
+read at runtime.
 """
 
-import logging
+import os
 
 import pandas as pd
-
-from fallback_data import FALLBACK_QUESTIONS
-
-CSV_PATH = "cysa_plus_questions.csv"
+from sqlalchemy import create_engine, text
 
 REQUIRED_COLUMNS = {
     "Domain",
@@ -29,36 +24,56 @@ REQUIRED_COLUMNS = {
     "Explanation",
 }
 
-logger = logging.getLogger(__name__)
+_DB_SELECT = text(
+    """
+    SELECT
+        domain AS "Domain",
+        sub_section AS "Sub-Section",
+        subtopic AS "Subtopic",
+        question AS "Question",
+        option_a AS "Option A",
+        option_b AS "Option B",
+        option_c AS "Option C",
+        option_d AS "Option D",
+        correct_answer AS "Correct Answer",
+        explanation AS "Explanation"
+    FROM questions
+    """
+)
 
 
-def _fallback_df() -> pd.DataFrame:
-    logger.warning("Falling back to hardcoded question set.")
-    return pd.DataFrame(FALLBACK_QUESTIONS)
+def _normalize_df(df: pd.DataFrame) -> pd.DataFrame:
+    df = df.copy()
+    df.columns = [str(col).strip() for col in df.columns]
+    if df.empty or not REQUIRED_COLUMNS.issubset(set(df.columns)):
+        return pd.DataFrame()
+    df = df.dropna(subset=["Question", "Correct Answer"])
+    if df.empty:
+        return df
+    for col in ["Domain", "Sub-Section", "Correct Answer"]:
+        df[col] = df[col].astype(str).str.strip()
+    return df.reset_index(drop=True)
 
 
 def load_questions() -> pd.DataFrame:
-    """Load quiz questions, falling back to hardcoded data on any problem."""
-    try:
-        df = pd.read_csv(CSV_PATH)
-    except (FileNotFoundError, pd.errors.EmptyDataError, pd.errors.ParserError) as exc:
-        logger.warning("Could not read %s: %s", CSV_PATH, exc)
-        return _fallback_df()
-
-    df.columns = [str(col).strip() for col in df.columns]
-
-    if df.empty or not REQUIRED_COLUMNS.issubset(set(df.columns)):
-        logger.warning(
-            "%s is empty or missing required columns %s.", CSV_PATH, REQUIRED_COLUMNS
+    """Load quiz questions from Postgres. Raises if URL/query/table is unusable."""
+    database_url = (os.environ.get("DATABASE_URL") or "").strip()
+    if not database_url.lower().startswith("postgresql"):
+        raise RuntimeError(
+            "DATABASE_URL must be a postgresql:// or postgresql+psycopg2:// URL "
+            "to load questions. CSV is not used at runtime."
         )
-        return _fallback_df()
+    try:
+        engine = create_engine(database_url)
+        with engine.connect() as conn:
+            df = pd.read_sql(_DB_SELECT, conn)
+    except Exception as exc:
+        raise RuntimeError(f"Could not load questions from Postgres: {exc}") from exc
 
-    # Drop rows that are missing critical fields (e.g. blank lines).
-    df = df.dropna(subset=["Question", "Correct Answer"])
+    df = _normalize_df(df)
     if df.empty:
-        return _fallback_df()
-
-    for col in ["Domain", "Sub-Section", "Correct Answer"]:
-        df[col] = df[col].astype(str).str.strip()
-
-    return df.reset_index(drop=True)
+        raise RuntimeError(
+            "questions table is empty or malformed. "
+            "Seed with: python scripts/seed_questions.py"
+        )
+    return df

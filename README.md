@@ -42,12 +42,16 @@ pages. Set up authentication as follows:
    the default). Without this setting locally, your browser won't keep the
    session cookie over HTTP.
 
-4. **(Optional) Configure database URL** for production. By default, the app
-   uses SQLite (`instance/users.db`) for local development. For Cloud Run
-   with Cloud SQL, set:
+4. **PostgreSQL is required** (no SQLite). For local work against staging Cloud
+   SQL, start the Auth Proxy, then:
    ```bash
-   export DATABASE_URL='postgresql://user:password@host/dbname'
+   cloud-sql-proxy bankpassport-be:us-central1:bankpassport --port=5432
+   export DATABASE_URL='postgresql+psycopg2://cysa_app:<PASSWORD>@127.0.0.1:5432/cybersecuritylab'
    ```
+   URL-encode reserved characters in the password. Staging Cloud Run uses the
+   Unix-socket URL in Secret Manager `cysa-exam-database-url`.
+
+   Or: `./scripts/run-local.sh` after `DATABASE_URL` is set.
 
 ### Creating the First User
 
@@ -62,10 +66,13 @@ page.
 ## Run
 
 ```bash
+export SESSION_COOKIE_SECURE=false
 python app.py
+# or: ./scripts/run-local.sh
 ```
 
 Then open the URL printed in the terminal (typically `http://127.0.0.1:8050`).
+Signup on localhost writes to the same `users` table as staging.
 
 **Note**: You must be logged in to access the exam. If not logged in, you'll
 be redirected to `/login`.
@@ -75,22 +82,20 @@ be redirected to `/login`.
 To run the test suite locally:
 
 ```bash
-# Install test dependencies
-pip install pytest
+# Isolated Postgres (never staging Cloud SQL)
+docker run -d --name cysa-test-pg -p 5432:5432 \
+  -e POSTGRES_USER=cysa_test -e POSTGRES_PASSWORD=cysa_test \
+  -e POSTGRES_DB=cysa_test postgres:16
 
-# Run all tests
+export TEST_DATABASE_URL='postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test'
+export SECRET_KEY=test-local-secret
+
 pytest -v tests/
-
-# Run specific test file
-pytest -v tests/test_auth.py
+pytest -v e2e/ --browser chromium   # first time: playwright install chromium
 ```
 
-Tests cover:
-- Auth module functions (user creation, password hashing, authentication)
-- Flask `before_request` auth gate (protected route redirects)
-- E2E smoke test (signup → logout → login → protected access)
-
-**Note**: Tests use temporary SQLite databases and set `SECRET_KEY` automatically.
+`tests/` is Flask-client / unit. `e2e/` is Playwright (login → exam paints → Dash).
+CI starts `postgres:16` as a service; it does not use the staging database.
 
 ## Security Notes
 
@@ -134,43 +139,16 @@ brand-color panel with the title and profile icon) shell, defined once in
 
 ## Data source
 
-Questions are loaded from `questions.csv` via `data_loader.load_questions()`.
-The CSV must contain these columns:
+`data_loader.load_questions()` reads the Postgres `questions` table and
+returns a DataFrame with these columns (exam UI contract):
 
 ```
 Domain, Sub-Section, Subtopic, Question, Option A, Option B, Option C, Option D, Correct Answer, Explanation
 ```
 
-`Correct Answer` should be the letter of the correct option (`A`, `B`, `C`,
-or `D`).
-
-### Fallback behavior
-
-If `questions.csv` is missing, empty, or missing required columns,
-`load_questions()` automatically falls back to the hardcoded questions in
-`fallback_data.py` so the app always has something to serve. A warning is
-logged to the console when this happens.
-
-## Swapping in PostgreSQL later
-
-`data_loader.load_questions()` is the only place that knows about the data
-source. To move from CSV to PostgreSQL:
-
-1. Add a DB driver to `requirements.txt` (e.g. `psycopg2-binary` or
-   `SQLAlchemy`).
-2. Replace the body of `load_questions()` with a query that returns a
-   `pandas.DataFrame` with the same columns listed above, for example:
-
-   ```python
-   import sqlalchemy
-
-   def load_questions() -> pd.DataFrame:
-       engine = sqlalchemy.create_engine(DATABASE_URL)
-       return pd.read_sql("SELECT * FROM questions", engine)
-   ```
-
-3. No changes are needed anywhere else in the app -- pages only ever
-   consume the DataFrame returned by `load_questions()`.
+CSV (`cysa_plus_questions.csv`) is used only by `scripts/seed_questions.py`.
+It is not read at runtime and is excluded from the Cloud Run image. An empty
+table or a failed query raises; there is no SQLite or hardcoded fallback.
 
 ## Session state
 
@@ -194,9 +172,10 @@ comptia_cysa/
 ├── components/
 │   ├── shell.py              # shared 75/25 layout + branding panel + profile icon
 │   └── ui.py                 # shared buttons, progress bar, score header, option builder
-├── data_loader.py           # load_questions() -> DataFrame, CSV with fallback
-├── fallback_data.py         # hardcoded fallback question records
-├── questions.csv            # sample question bank
+├── data_loader.py           # load_questions() -> DataFrame from Postgres
+├── cysa_plus_questions.csv  # seed input only (not used at runtime)
+├── scripts/seed_questions.py
+├── scripts/run-local.sh
 ├── requirements.txt
 └── README.md
 ```
@@ -204,7 +183,5 @@ comptia_cysa/
 ## Out of scope (possible future additions)
 
 - Per-question or total exam timers
-- Persisting exam history beyond the current browser session (e.g. to a
-  database) so progress survives a restart
+- Persisting exam history to Postgres beyond the current browser session
 - A functional (non-mockup), multi-user Admin Dashboard backed by real data
-- Live PostgreSQL connection (only the `load_questions()` seam is prepared for it)

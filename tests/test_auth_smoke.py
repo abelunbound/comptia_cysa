@@ -1,39 +1,34 @@
-"""E2E smoke test: signup → logout → login → protected page access."""
+"""Flask-client smoke: signup → logout → login → protected page access.
+
+Browser e2e lives in e2e/ (Playwright). This file is not a substitute.
+"""
 
 import os
-import tempfile
-import uuid
 
 import pytest
 
 from app import app as dash_app
-from auth import User, authenticate_user, create_user, db
+from auth import authenticate_user, create_user, db
 
 
 @pytest.fixture
 def client():
-    """Create test client with temporary database."""
+    """Create test client on isolated CI Postgres."""
     os.environ["SECRET_KEY"] = "test-secret-key-smoke"
-    
-    db_fd, db_path = tempfile.mkstemp(suffix=f"_{uuid.uuid4().hex}.db")
-    dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
     dash_app.server.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     dash_app.server.config["TESTING"] = True
     dash_app.server.config["WTF_CSRF_ENABLED"] = False
-    
-    # Recreate all tables for this test
+
     with dash_app.server.app_context():
         db.drop_all()
         db.create_all()
-    
+
     with dash_app.server.test_client() as client:
         yield client
-    
-    # Cleanup
+
     with dash_app.server.app_context():
         db.drop_all()
-    os.close(db_fd)
-    os.unlink(db_path)
 
 
 def test_smoke_signup_logout_login_protected_access(client):

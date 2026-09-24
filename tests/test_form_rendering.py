@@ -1,8 +1,6 @@
 """Tests to ensure signup and login forms actually render (not blank pages)."""
 
 import os
-import tempfile
-import uuid
 
 import pytest
 
@@ -12,26 +10,22 @@ from auth import db
 
 @pytest.fixture
 def client():
-    """Create test client with temporary database."""
+    """Create test client on isolated CI Postgres."""
     os.environ["SECRET_KEY"] = "test-secret-key-form-rendering"
-    
-    db_fd, db_path = tempfile.mkstemp(suffix=f"_{uuid.uuid4().hex}.db")
-    dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = f"sqlite:///{db_path}"
+    dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
     dash_app.server.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
     dash_app.server.config["TESTING"] = True
     dash_app.server.config["WTF_CSRF_ENABLED"] = False
-    
+
     with dash_app.server.app_context():
         db.drop_all()
         db.create_all()
-    
+
     with dash_app.server.test_client() as client:
         yield client
-    
+
     with dash_app.server.app_context():
         db.drop_all()
-    os.close(db_fd)
-    os.unlink(db_path)
 
 
 def test_signup_page_renders_form_fields(client):

@@ -34,6 +34,7 @@ def layout(**kwargs):
         html.Div(
             [
                 dcc.Store(id="review-page-store", data=0),
+                html.Div(id="review-page-ready"),
                 html.Div(id="review-container"),
             ]
         )
@@ -301,12 +302,12 @@ def change_review_page(
 
 @dash.callback(
     Output("review-container", "children"),
+    Input("review-page-ready", "id"),
     Input("_pages_location", "search"),
     Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
-    prevent_initial_call=True,
 )
-def render_review(search, history, page):
+def render_review(_ready, search, history, page):
     """Render review content based on exam history and page number."""
     if not history:
         return _empty_state()
