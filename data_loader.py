@@ -67,12 +67,16 @@ def load_questions() -> pd.DataFrame:
             "DATABASE_URL must be a postgresql:// or postgresql+psycopg2:// URL "
             "to load questions. CSV is not used at runtime."
         )
+    engine = None
     try:
         engine = create_engine(database_url)
         with engine.connect() as conn:
             df = pd.read_sql(_DB_SELECT, conn)
     except Exception as exc:
         raise RuntimeError(f"Could not load questions from Postgres: {exc}") from exc
+    finally:
+        if engine is not None:
+            engine.dispose()
 
     df = _normalize_df(df)
     if df.empty:

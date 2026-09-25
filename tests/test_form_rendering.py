@@ -4,12 +4,11 @@ import os
 
 import pytest
 
-from app import app as dash_app
 from auth import db
 
 
 @pytest.fixture
-def client():
+def client(dash_app):
     """Create test client on isolated CI Postgres."""
     os.environ["SECRET_KEY"] = "test-secret-key-form-rendering"
     dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]

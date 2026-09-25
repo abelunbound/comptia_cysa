@@ -4,12 +4,11 @@ import os
 
 import pytest
 
-from app import app as dash_app
 from auth import create_user, db
 
 
 @pytest.fixture
-def client():
+def client(dash_app):
     """Create test client on isolated CI Postgres."""
     os.environ["SECRET_KEY"] = "test-secret-key-for-client"
     dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
@@ -68,7 +67,7 @@ def test_signup_page_accessible_without_auth(client):
     assert response.status_code == 200
 
 
-def test_authenticated_user_can_access_protected_routes(client):
+def test_authenticated_user_can_access_protected_routes(client, dash_app):
     """Authenticated session can GET protected routes with 200."""
     with dash_app.server.app_context():
         user, error = create_user("authuser@example.com", "TestPassword123")
@@ -89,7 +88,7 @@ def test_authenticated_user_can_access_protected_routes(client):
     assert response.status_code == 200
 
 
-def test_logout_clears_session(client):
+def test_logout_clears_session(client, dash_app):
     """After logout, protected routes redirect again."""
     with dash_app.server.app_context():
         user, error = create_user("logoutuser@example.com", "TestPassword123")

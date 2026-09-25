@@ -7,6 +7,7 @@ import pytest
 from flask import Flask
 
 from auth import authenticate_user, create_user, db, init_auth
+from tests.conftest import TEST_ENGINE_OPTIONS
 
 
 @pytest.fixture
@@ -16,6 +17,7 @@ def test_app():
     app.config["SECRET_KEY"] = "test-secret-key"
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = TEST_ENGINE_OPTIONS
     app.config["TESTING"] = True
 
     init_auth(app)

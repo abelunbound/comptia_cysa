@@ -4,6 +4,8 @@ import os
 import sys
 from pathlib import Path
 
+import pytest
+
 workspace_root = Path(__file__).parent.parent
 sys.path.insert(0, str(workspace_root))
 
@@ -17,3 +19,18 @@ os.environ.setdefault("SECRET_KEY", "test-secret-key-for-client")
 from tests.pg_seed import ensure_schema_and_one_question  # noqa: E402
 
 ensure_schema_and_one_question(os.environ["DATABASE_URL"])
+
+# Fail DDL that is waiting on another session instead of blocking the job.
+TEST_ENGINE_OPTIONS = {
+    "pool_pre_ping": True,
+    "connect_args": {"options": "-c lock_timeout=5s"},
+}
+
+
+@pytest.fixture
+def dash_app():
+    """Import the Dash app only when a test needs it, after reseeding questions."""
+    ensure_schema_and_one_question(os.environ["DATABASE_URL"])
+    from app import app as dash_application
+
+    return dash_application

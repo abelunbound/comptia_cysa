@@ -14,6 +14,7 @@ from attempts import (
     list_answers_for_user_attempt,
 )
 from auth import AttemptAnswer, ExamAttempt, Question, create_user, db, init_auth
+from tests.conftest import TEST_ENGINE_OPTIONS
 from tests.pg_seed import QUESTION_VALUES
 
 
@@ -23,6 +24,7 @@ def app_context():
     app.config["SECRET_KEY"] = "test-secret-key"
     app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
     app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
+    app.config["SQLALCHEMY_ENGINE_OPTIONS"] = TEST_ENGINE_OPTIONS
     app.config["TESTING"] = True
 
     init_auth(app)
