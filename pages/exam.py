@@ -538,6 +538,9 @@ def confirm_replace_start(_confirm, _cancel, domain, subsection, pending_mode):
     prevent_initial_call=True,
 )
 def toggle_quit_confirm(_quit, _cancel):
+    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
+    if not triggered or not triggered.get("value"):
+        return dash.no_update
     if dash.ctx.triggered_id == "quit-exam-btn":
         return QUIT_PANEL_STYLE
     return HIDDEN
@@ -612,6 +615,9 @@ dash.clientside_callback(
 )
 def persist_selected_option(_a, _b, _c, _d, data):
     """Thin DB write. UI already updated from the clientside store patch."""
+    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
+    if not triggered or not triggered.get("value"):
+        return dash.no_update
     if not current_user.is_authenticated or not data or not data.get("questions"):
         return dash.no_update
     idx = data.get("current_index", 0)
@@ -624,13 +630,15 @@ def persist_selected_option(_a, _b, _c, _d, data):
     letter = id_to_letter.get(dash.ctx.triggered_id)
     if not letter:
         return dash.no_update
-    save_selected_option(
+    saved = save_selected_option(
         current_user.id,
         data.get("attempt_id"),
         questions[idx].get("id"),
         letter,
     )
-    return ""
+    if not saved:
+        return dash.no_update
+    return f"saved:{letter}"
 
 
 @dash.callback(
@@ -689,6 +697,9 @@ dash.clientside_callback(
     prevent_initial_call=True,
 )
 def persist_resume_index(_prev_clicks, _next_clicks, data):
+    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
+    if not triggered or not triggered.get("value"):
+        return dash.no_update
     if not current_user.is_authenticated or not data or not data.get("questions"):
         return dash.no_update
     total = len(data["questions"])
@@ -914,8 +925,16 @@ def hydrate_in_progress(_ready):
     State("exam-session-store", "data"),
     prevent_initial_call=True,
 )
-def submit_exam(_n_clicks, data):
+def submit_exam(n_clicks, data):
     """Complete the attempt from DB answers and redirect. Ignore client scores."""
+    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
+    if (
+        not triggered
+        or not triggered.get("value")
+        or not n_clicks
+        or dash.ctx.triggered_id != "submit-exam-btn"
+    ):
+        return dash.no_update, dash.no_update
     if not current_user.is_authenticated or not data:
         return dash.no_update, dash.no_update
 

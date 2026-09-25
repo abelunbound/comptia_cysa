@@ -1,6 +1,12 @@
 """Playwright: login → start → answer → refresh → resume → complete → DB results."""
 
-from e2e.helpers import signup_and_land, start_seeded_exam, unique_email, wait_for_home
+from e2e.helpers import (
+    signup_and_land,
+    start_seeded_exam,
+    unique_email,
+    wait_for_in_progress_exam,
+    wait_for_saved_option,
+)
 
 
 def test_refresh_resumes_then_complete_results_from_db(page, live_server):
@@ -12,11 +18,11 @@ def test_refresh_resumes_then_complete_results_from_db(page, live_server):
     signup_and_land(page, base, email, password)
     start_seeded_exam(page)
     page.locator("#option-card-B").click()
+    wait_for_saved_option(page, "B")
     page.get_by_text("Question 1 of 1").wait_for()
 
     page.reload()
-    page.get_by_text("Question 1 of 1").wait_for()
-    page.locator("#exam-mode-btn").wait_for(state="hidden")
+    wait_for_in_progress_exam(page, base)
     page.locator("#option-card-B").wait_for()
 
     page.locator("#submit-exam-btn").click()
@@ -35,13 +41,11 @@ def test_logout_login_resumes_in_progress(page, live_server):
     signup_and_land(page, base, email, password)
     start_seeded_exam(page)
     page.locator("#option-card-A").click()
+    wait_for_saved_option(page, "A")
 
     page.goto(f"{base}/logout")
     page.wait_for_url(f"{base}/login")
     page.locator('input[name="email"]').fill(email)
     page.locator('input[name="password"]').fill(password)
     page.get_by_role("button", name="Log In").click()
-    wait_for_home(page, base)
-
-    page.get_by_text("Question 1 of 1").wait_for()
-    page.locator("#exam-mode-btn").wait_for(state="hidden")
+    wait_for_in_progress_exam(page, base)

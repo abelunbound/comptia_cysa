@@ -18,6 +18,20 @@ def select_dash_dropdown(page, dropdown_id, option_text):
     page.get_by_text(option_text, exact=True).click()
 
 
+def wait_for_saved_option(page, letter):
+    """Wait until the thin persist callback has written the choice."""
+    page.locator("#exam-persist-ack").filter(has_text=f"saved:{letter}").wait_for(
+        state="attached"
+    )
+
+
+def wait_for_in_progress_exam(page, base):
+    """Resume must stay on `/` and show the current question."""
+    wait_for_home(page, base)
+    page.get_by_text("Question 1 of 1").wait_for()
+    page.locator("#exam-mode-btn").wait_for(state="hidden")
+
+
 def start_seeded_exam(page, mode="exam"):
     page.get_by_text("CySA+ V4 (New Version)").wait_for()
     select_dash_dropdown(page, "domain-dropdown", "1.0 Security Operations")
