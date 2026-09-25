@@ -7,7 +7,7 @@ import pytest
 from flask import Flask
 
 from auth import authenticate_user, create_user, db, init_auth
-from tests.conftest import TEST_ENGINE_OPTIONS
+from tests.conftest import TEST_ENGINE_OPTIONS, reset_schema
 
 
 @pytest.fixture
@@ -22,13 +22,14 @@ def test_app():
 
     init_auth(app)
     with app.app_context():
-        db.drop_all()
+        reset_schema()
         db.create_all()
 
     yield app
 
     with app.app_context():
-        db.drop_all()
+        reset_schema()
+        db.engine.dispose()
 
 
 @pytest.fixture

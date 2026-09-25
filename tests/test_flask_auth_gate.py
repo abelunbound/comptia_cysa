@@ -5,6 +5,7 @@ import os
 import pytest
 
 from auth import create_user, db
+from tests.conftest import reset_schema
 
 
 @pytest.fixture
@@ -17,14 +18,14 @@ def client(dash_app):
     dash_app.server.config["WTF_CSRF_ENABLED"] = False
 
     with dash_app.server.app_context():
-        db.drop_all()
+        reset_schema()
         db.create_all()
 
     with dash_app.server.test_client() as client:
         yield client
 
     with dash_app.server.app_context():
-        db.drop_all()
+        reset_schema()
 
 
 def test_unauthenticated_root_redirects_to_login(client):

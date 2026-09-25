@@ -18,7 +18,7 @@ from attempts import (
     start_attempt,
 )
 from auth import AttemptAnswer, ExamAttempt, Question, create_user, db, init_auth
-from tests.conftest import TEST_ENGINE_OPTIONS
+from tests.conftest import TEST_ENGINE_OPTIONS, reset_schema
 from tests.pg_seed import QUESTION_VALUES
 
 
@@ -33,10 +33,13 @@ def app_context():
 
     init_auth(app)
     with app.app_context():
-        db.drop_all()
+        reset_schema()
         db.create_all()
-        yield app
-        db.drop_all()
+        try:
+            yield app
+        finally:
+            reset_schema()
+            db.engine.dispose()
 
 
 def _user(email="owner@example.com"):

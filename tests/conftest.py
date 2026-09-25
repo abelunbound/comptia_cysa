@@ -16,6 +16,7 @@ DEFAULT_TEST_DATABASE_URL = (
 os.environ["DATABASE_URL"] = os.environ.get("TEST_DATABASE_URL") or DEFAULT_TEST_DATABASE_URL
 os.environ.setdefault("SECRET_KEY", "test-secret-key-for-client")
 
+from auth import db  # noqa: E402
 from tests.pg_seed import ensure_schema_and_one_question  # noqa: E402
 
 ensure_schema_and_one_question(os.environ["DATABASE_URL"])
@@ -25,6 +26,12 @@ TEST_ENGINE_OPTIONS = {
     "pool_pre_ping": True,
     "connect_args": {"options": "-c lock_timeout=5s"},
 }
+
+
+def reset_schema():
+    """Drop tables only after releasing this test's session connection."""
+    db.session.remove()
+    db.drop_all()
 
 
 @pytest.fixture
