@@ -4,7 +4,9 @@ Pages (see pages/):
 - /        exam setup (Domain/Sub-Section) + question-by-question exam taking
 - /results overall performance donut chart + this session's attempt history
 - /review  per-question breakdown of a completed attempt
-- /admin   static admin dashboard mockup, reached via the profile icon
+- /admin   dashboard; large numbers from this user's completed attempts
+- /exams   exam catalog cards
+- /admin/results  Results Database (same Exam Results body, admin sidebar)
 
 exam-session-store holds a client-safe copy of the in-progress exam (no
 correct answers). Postgres is the source of truth for answers, score, and
@@ -104,7 +106,7 @@ def signup():
             return render_template("signup.html", error=error)
 
         login_user(user)
-        return redirect("/")
+        return redirect("/admin")
 
     return render_template("signup.html")
 
@@ -121,7 +123,7 @@ def login():
             return render_template("login.html", error="Invalid email or password.")
 
         login_user(user)
-        return redirect("/")
+        return redirect("/admin")
 
     return render_template("login.html")
 
@@ -137,7 +139,7 @@ def logout():
 def require_login():
     """Redirect unauthenticated users to /login for protected routes.
 
-    Protected routes: /, /results, /review, /admin
+    Protected routes: /, /results, /review, /admin, /exams, /admin/results
     Public routes: /login, /signup, /logout, /assets/*, /_dash-*, /_reload-hash
     """
     if request.path in ("/login", "/signup", "/logout"):

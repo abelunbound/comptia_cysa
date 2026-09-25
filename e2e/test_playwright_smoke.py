@@ -4,7 +4,7 @@ Flask's test client is not enough for this path — Playwright drives Chromium
 against a live gunicorn process.
 """
 
-from e2e.helpers import unique_email, wait_for_home
+from e2e.helpers import open_cysa_exam, unique_email, wait_for_dashboard
 
 
 def test_login_exam_paints_and_dash_action(page, live_server):
@@ -17,7 +17,7 @@ def test_login_exam_paints_and_dash_action(page, live_server):
     page.locator('input[name="email"]').fill(email)
     page.locator('input[name="password"]').fill(password)
     page.get_by_role("button", name="Create Account").click()
-    wait_for_home(page, base)
+    wait_for_dashboard(page, base)
 
     page.goto(f"{base}/logout")
     page.wait_for_url(f"{base}/login")
@@ -27,7 +27,8 @@ def test_login_exam_paints_and_dash_action(page, live_server):
     page.locator('input[name="email"]').fill(email)
     page.locator('input[name="password"]').fill(password)
     page.get_by_role("button", name="Log In").click()
-    wait_for_home(page, base)
+    wait_for_dashboard(page, base)
+    open_cysa_exam(page, base)
 
     page.get_by_text("CySA+ V4 (New Version)").wait_for()
     start = page.locator("#exam-mode-btn")

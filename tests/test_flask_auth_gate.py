@@ -1,6 +1,7 @@
 """Integration tests for Flask before_request auth gate and protected routes."""
 
 import os
+import re
 
 import pytest
 
@@ -49,6 +50,18 @@ def test_unauthenticated_admin_redirects_to_login(client):
     assert response.location == "/login"
 
 
+def test_unauthenticated_exams_redirects_to_login(client):
+    response = client.get("/exams", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.location == "/login"
+
+
+def test_unauthenticated_admin_results_redirects_to_login(client):
+    response = client.get("/admin/results", follow_redirects=False)
+    assert response.status_code == 302
+    assert response.location == "/login"
+
+
 def test_unauthenticated_review_redirects_to_login(client):
     """Unauthenticated GET /review redirects to /login (302)."""
     response = client.get("/review", follow_redirects=False)
@@ -66,6 +79,49 @@ def test_signup_page_accessible_without_auth(client):
     """GET /signup is accessible without authentication (200)."""
     response = client.get("/signup", follow_redirects=False)
     assert response.status_code == 200
+
+
+def _csrf_token(client, path):
+    html = client.get(path).get_data(as_text=True)
+    match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', html)
+    if match is None:
+        match = re.search(r'value="([^"]+)"[^>]*name="csrf_token"', html)
+    assert match, f"CSRF token missing on GET {path}"
+    return match.group(1)
+
+
+def test_signup_redirects_to_dashboard(client):
+    token = _csrf_token(client, "/signup")
+    response = client.post(
+        "/signup",
+        data={
+            "email": "newuser@example.com",
+            "password": "TestPassword123",
+            "csrf_token": token,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.location == "/admin"
+
+
+def test_login_redirects_to_dashboard(client, dash_app):
+    with dash_app.server.app_context():
+        user, error = create_user("loginland@example.com", "TestPassword123")
+        assert error is None, error
+
+    token = _csrf_token(client, "/login")
+    response = client.post(
+        "/login",
+        data={
+            "email": "loginland@example.com",
+            "password": "TestPassword123",
+            "csrf_token": token,
+        },
+        follow_redirects=False,
+    )
+    assert response.status_code == 302
+    assert response.location == "/admin"
 
 
 def test_authenticated_user_can_access_protected_routes(client, dash_app):
@@ -86,6 +142,12 @@ def test_authenticated_user_can_access_protected_routes(client, dash_app):
     assert response.status_code == 200
 
     response = client.get("/admin", follow_redirects=False)
+    assert response.status_code == 200
+
+    response = client.get("/exams", follow_redirects=False)
+    assert response.status_code == 200
+
+    response = client.get("/admin/results", follow_redirects=False)
     assert response.status_code == 200
 
 

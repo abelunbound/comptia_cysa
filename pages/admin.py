@@ -1,18 +1,30 @@
-"""Admin Dashboard ('/admin'): static UI mockup reached via the profile icon.
+"""Admin Dashboard ('/admin'): profile-icon home.
 
-This page intentionally uses placeholder data throughout -- the app has no
-multi-user backend yet, so nothing here is wired to real state. It exists to
-demonstrate the target layout for a future, fully-functional admin area.
+The four large numbers, time chart, latest-performance donut, and
+browse-results table are live and scoped to current_user.
 
-SECURITY NOTE (M1): Currently accessible to any logged-in user. Role-based access
-control (admin vs. regular user) will be added in a future milestone. Residual
-risk: authenticated users can view this mock dashboard, which contains no real data.
+SECURITY NOTE: any logged-in user can open this page. Metrics never include
+another user's attempts. Role-based admin access is a later milestone.
 """
 
 import dash
 import plotly.graph_objects as go
-from dash import Input, Output, dcc, html
+from dash import Input, Output, State, dcc, html
 from flask_login import current_user
+
+from components.admin_chrome import admin_chrome
+from attempts import (
+    CHART_ATTEMPT_SLOTS,
+    PASS_PERCENT,
+    RESULTS_PAGE_SIZE,
+    dashboard_metrics,
+    dashboard_results_page,
+    latest_exam_percent,
+    recent_attempt_durations,
+    time_target_baseline,
+)
+
+DONUT_LABEL_COLOR = "#4338ca"
 
 dash.register_page(__name__, path="/admin", name="Admin")
 
@@ -25,80 +37,29 @@ def layout(**kwargs):
     return _admin_dashboard()
 
 
-NAV_ITEMS = [
-    ("Dashboard", True),
-    ("Exams", False),
-    ("Results Database", False),
-    ("Certificates", False),
-    ("Settings", False),
-    ("Help", False),
-]
-
-STAT_CARDS = [
-    {"label": "Need to Grade", "value": "87%", "sub": "Average grade this month"},
-    {"label": "New Active Students", "value": "536", "sub": "+6.35% from last month"},
-    {"label": "Questions", "value": "64", "sub": "+2.56% in the question bank"},
-]
-
-
-def _sidebar():
-    nav_children = []
-    for label, active in NAV_ITEMS:
-        nav_children.append(
-            html.Div(
-                label,
-                style={
-                    "padding": "10px 16px",
-                    "borderRadius": "6px",
-                    "marginBottom": "4px",
-                    "backgroundColor": "#eef2ff" if active else "transparent",
-                    "color": "#4338ca" if active else "#374151",
-                    "fontWeight": "600" if active else "normal",
-                    "fontSize": "14px",
-                },
-            )
-        )
-
-    return html.Div(
-        style={
-            "flex": "0 0 220px",
-            "maxWidth": "220px",
-            "backgroundColor": "#ffffff",
-            "borderRight": "1px solid #e5e7eb",
-            "padding": "24px 12px",
-            "boxSizing": "border-box",
-            "display": "flex",
-            "flexDirection": "column",
-            "justifyContent": "space-between",
+def _stat_cards(metrics):
+    return [
+        {
+            "label": "Highest score",
+            "value": f"{metrics['highest_score']}%",
+            "sub": "Best completed exam",
         },
-        children=[
-            html.Div(
-                [
-                    html.Div(
-                        "CySA+ Admin",
-                        style={
-                            "fontWeight": "bold",
-                            "fontSize": "18px",
-                            "padding": "0 16px",
-                            "marginBottom": "24px",
-                        },
-                    ),
-                    html.Div(nav_children),
-                ]
-            ),
-            dcc.Link(
-                "\u2190 Back to Quiz",
-                href="/",
-                style={
-                    "display": "block",
-                    "padding": "10px 16px",
-                    "color": "#2563eb",
-                    "fontSize": "14px",
-                    "textDecoration": "none",
-                },
-            ),
-        ],
-    )
+        {
+            "label": "Total attempts",
+            "value": str(metrics["total_attempts"]),
+            "sub": "Completed exams",
+        },
+        {
+            "label": "Pass rate",
+            "value": f"{metrics['pass_rate']}%",
+            "sub": f"Share of exams at {PASS_PERCENT}% or above",
+        },
+        {
+            "label": "Average score",
+            "value": f"{metrics['average_score']}%",
+            "sub": "Mean of completed exam percents",
+        },
+    ]
 
 
 def _stat_card(card):
@@ -121,149 +82,324 @@ def _stat_card(card):
     )
 
 
-def _exam_taken_chart():
-    months = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"]
-    values = [12, 14, 18, 22, 19, 24, 28, 26, 21, 17, 15, 13]
+def _exam_taken_chart(durations):
+    """Target area (80→50 min) plus this user's Start→Submit times."""
+    slots = list(range(1, CHART_ATTEMPT_SLOTS + 1))
+    baseline = time_target_baseline()
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=slots,
+            y=baseline,
+            name="Target",
+            mode="lines+markers",
+            line={"color": "#6366f1", "width": 2},
+            marker={"size": 8},
+            fill="tozeroy",
+            fillcolor="rgba(99, 102, 241, 0.12)",
+        )
+    )
+    if durations:
+        fig.add_trace(
+            go.Scatter(
+                x=list(range(1, len(durations) + 1)),
+                y=durations,
+                name="Your time",
+                mode="lines+markers",
+                line={"color": "#0f766e", "width": 2},
+                marker={"size": 8},
+            )
+        )
+    fig.update_layout(
+        title="Time per attempt vs target",
+        xaxis={
+            "title": "Attempt",
+            "range": [0.5, CHART_ATTEMPT_SLOTS + 0.5],
+            "dtick": 1,
+            "tickmode": "linear",
+        },
+        yaxis={"title": "Minutes", "range": [0, 120], "dtick": 20},
+        margin={"l": 48, "r": 10, "t": 40, "b": 40},
+        height=300,
+        plot_bgcolor="white",
+        legend={"orientation": "h", "y": -0.2},
+    )
+    return dcc.Graph(figure=fig, config={"displayModeBar": False})
 
+
+def _latest_performance_chart(percent):
+    """Donut of the latest exam vs 100%. Center label only; no slice text or legend."""
+    scored = 0 if percent is None else max(0, min(100, percent))
+    remainder = 100 - scored
     fig = go.Figure(
         data=[
-            go.Scatter(
-                x=months,
-                y=values,
-                mode="lines+markers",
-                line={"color": "#6366f1", "shape": "spline"},
-                fill="tozeroy",
-                fillcolor="rgba(99, 102, 241, 0.1)",
+            go.Pie(
+                values=[scored, remainder],
+                hole=0.72,
+                sort=False,
+                direction="clockwise",
+                rotation=90,
+                textinfo="none",
+                hoverinfo="skip",
+                marker={"colors": ["#6366f1", "#eef2ff"]},
             )
         ]
     )
     fig.update_layout(
-        title="Exam Taken Times",
-        margin={"l": 30, "r": 10, "t": 40, "b": 30},
-        height=300,
-        plot_bgcolor="white",
+        showlegend=False,
+        margin={"l": 10, "r": 10, "t": 8, "b": 8},
+        height=260,
+        paper_bgcolor="white",
+        annotations=[
+            {
+                "text": f"{scored}%",
+                "x": 0.5,
+                "y": 0.5,
+                "xref": "paper",
+                "yref": "paper",
+                "showarrow": False,
+                "font": {"size": 36, "color": DONUT_LABEL_COLOR, "family": "Arial, sans-serif"},
+            }
+        ],
     )
     return dcc.Graph(figure=fig, config={"displayModeBar": False})
 
 
-def _average_results_chart():
-    subjects = ["Economics", "Science", "English", "Mathematic"]
-    easy = [20, 25, 22, 30]
-    medium = [25, 20, 28, 25]
-    hard = [15, 18, 12, 20]
-
-    fig = go.Figure(
-        data=[
-            go.Bar(name="Easy questions", x=easy, y=subjects, orientation="h", marker_color="#a5b4fc"),
-            go.Bar(name="Medium questions", x=medium, y=subjects, orientation="h", marker_color="#818cf8"),
-            go.Bar(name="Hard questions", x=hard, y=subjects, orientation="h", marker_color="#4f46e5"),
-        ]
-    )
-    fig.update_layout(
-        title="Average Results For Test Questions",
-        barmode="stack",
-        margin={"l": 90, "r": 10, "t": 40, "b": 30},
-        height=300,
-        plot_bgcolor="white",
-        legend={"orientation": "h", "y": -0.15},
-    )
-    return dcc.Graph(figure=fig, config={"displayModeBar": False})
+_TH_STYLE = {
+    "textAlign": "left",
+    "padding": "10px 8px",
+    "backgroundColor": DONUT_LABEL_COLOR,
+    "color": "#ffffff",
+    "fontWeight": "600",
+    "border": "none",
+}
+_TD_STYLE = {
+    "padding": "10px 8px",
+    "borderBottom": "1px solid #f3f4f6",
+    "color": "#111827",
+}
 
 
-RESULTS_TABLE_ROWS = [
-    {"name": "Tahsan Khan", "score": "16.7%", "attempts": "1/2", "start_date": "Jan 20, 2026"},
-    {"name": "Anwar Hussen", "score": "19.7%", "attempts": "2/2", "start_date": "Jan 20, 2026"},
-    {"name": "Hasan Khan", "score": "13.7%", "attempts": "0/2", "start_date": "Jan 20, 2026"},
-]
-
-
-def _results_table():
+def _results_table(rows):
     header = html.Tr(
         [
-            html.Th("Name"),
-            html.Th("Total Score"),
-            html.Th("Attempts"),
-            html.Th("Start Date"),
+            html.Th("Subsection", style=_TH_STYLE),
+            html.Th("Your Score", style=_TH_STYLE),
+            html.Th("Attempts", style=_TH_STYLE),
+            html.Th("Date", style=_TH_STYLE),
         ]
     )
-    rows = [
-        html.Tr(
-            [
-                html.Td(row["name"]),
-                html.Td(row["score"]),
-                html.Td(row["attempts"]),
-                html.Td(row["start_date"]),
-            ]
-        )
-        for row in RESULTS_TABLE_ROWS
-    ]
+    if not rows:
+        body = [
+            html.Tr(
+                [
+                    html.Td(
+                        "No completed exams yet.",
+                        colSpan=4,
+                        style={**_TD_STYLE, "color": "#6b7280"},
+                    )
+                ]
+            )
+        ]
+    else:
+        body = [
+            html.Tr(
+                [
+                    html.Td(row["subsection"], style=_TD_STYLE),
+                    html.Td(row["score"], style=_TD_STYLE),
+                    html.Td(str(row["attempts"]), style=_TD_STYLE),
+                    html.Td(row["date"], style=_TD_STYLE),
+                ]
+            )
+            for row in rows
+        ]
     return html.Table(
-        [html.Thead(header), html.Tbody(rows)],
-        style={"width": "100%", "borderCollapse": "collapse", "fontSize": "14px"},
+        [html.Thead(header), html.Tbody(body)],
+        style={
+            "width": "100%",
+            "borderCollapse": "collapse",
+            "fontSize": "14px",
+            "overflow": "hidden",
+            "borderRadius": "6px",
+        },
+    )
+
+
+_PAGER_BUTTON = {
+    "padding": "6px 12px",
+    "border": "1px solid #d1d5db",
+    "borderRadius": "6px",
+    "backgroundColor": "white",
+    "cursor": "pointer",
+    "fontSize": "13px",
+}
+
+
+def _pager(meta, page, pages, total):
+    if total <= RESULTS_PAGE_SIZE:
+        style = {"display": "none"}
+    else:
+        style = {
+            "display": "flex",
+            "alignItems": "center",
+            "justifyContent": "flex-end",
+            "gap": "12px",
+            "marginTop": "12px",
+        }
+    return html.Div(
+        style=style,
+        children=[
+            html.Button(
+                "Previous",
+                id="browse-results-prev",
+                n_clicks=0,
+                disabled=page <= 1,
+                style=_PAGER_BUTTON,
+            ),
+            html.Span(meta, id="browse-results-meta", style={"fontSize": "13px", "color": "#6b7280"}),
+            html.Button(
+                "Next",
+                id="browse-results-next",
+                n_clicks=0,
+                disabled=page >= pages,
+                style=_PAGER_BUTTON,
+            ),
+        ],
+    )
+
+
+def _browse_results_block():
+    payload = dashboard_results_page(current_user.id, page=1)
+    return html.Div(
+        [
+            html.H3("Browse Mock Exam Results", style={"marginTop": 0}),
+            html.Div(id="browse-results-ready"),
+            dcc.Store(id="browse-results-page", data=1),
+            html.Div(_results_table(payload["rows"]), id="browse-results-table"),
+            _pager(
+                _page_meta(payload),
+                payload["page"],
+                payload["pages"],
+                payload["total"],
+            ),
+        ]
+    )
+
+
+def _page_meta(payload):
+    total = payload["total"]
+    if not total:
+        return ""
+    page = payload["page"]
+    size = RESULTS_PAGE_SIZE
+    start = (page - 1) * size + 1
+    end = min(page * size, total)
+    return f"{start}–{end} of {total}"
+
+
+def _is_real_click():
+    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
+    return bool(triggered and triggered.get("value"))
+
+
+@dash.callback(
+    Output("browse-results-table", "children"),
+    Output("browse-results-meta", "children"),
+    Output("browse-results-prev", "disabled"),
+    Output("browse-results-next", "disabled"),
+    Output("browse-results-page", "data"),
+    Input("browse-results-ready", "id"),
+    Input("browse-results-prev", "n_clicks"),
+    Input("browse-results-next", "n_clicks"),
+    State("browse-results-page", "data"),
+)
+def paginate_browse_results(_ready, _prev, _next, page):
+    if not current_user.is_authenticated:
+        return _results_table([]), "", True, True, 1
+
+    page = page or 1
+    triggered = dash.ctx.triggered_id
+    if triggered == "browse-results-next" and _is_real_click():
+        page += 1
+    elif triggered == "browse-results-prev" and _is_real_click():
+        page -= 1
+
+    payload = dashboard_results_page(current_user.id, page=page)
+    return (
+        _results_table(payload["rows"]),
+        _page_meta(payload),
+        payload["page"] <= 1,
+        payload["page"] >= payload["pages"] or payload["total"] == 0,
+        payload["page"],
     )
 
 
 def _admin_dashboard():
     """Return the admin dashboard UI."""
-    return html.Div(
-        style={"display": "flex", "minHeight": "100vh", "fontFamily": "Arial, sans-serif"},
-        children=[
-            _sidebar(),
+    metrics = dashboard_metrics(current_user.id)
+    durations = recent_attempt_durations(current_user.id)
+    latest_percent = latest_exam_percent(current_user.id)
+    return admin_chrome(
+        [
             html.Div(
-                style={"flex": 1, "padding": "32px", "backgroundColor": "#f9fafb"},
+                [
+                    html.H2("Good Morning", style={"margin": 0}),
+                    html.P(
+                        "Large numbers are from your completed exams.",
+                        style={"color": "#6b7280"},
+                    ),
+                ],
+                style={"marginBottom": "24px"},
+            ),
+            html.Div(
+                style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
+                children=[_stat_card(card) for card in _stat_cards(metrics)],
+            ),
+            html.Div(
+                style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
                 children=[
                     html.Div(
-                        [
-                            html.H2("Good Morning", style={"margin": 0}),
-                            html.P(
-                                "This is a static preview of a future admin dashboard.",
-                                style={"color": "#6b7280"},
-                            ),
-                        ],
-                        style={"marginBottom": "24px"},
-                    ),
-                    html.Div(
-                        style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
-                        children=[_stat_card(card) for card in STAT_CARDS],
-                    ),
-                    html.Div(
-                        style={"display": "flex", "gap": "16px", "marginBottom": "24px"},
-                        children=[
-                            html.Div(
-                                _exam_taken_chart(),
-                                style={
-                                    "flex": 3,
-                                    "backgroundColor": "white",
-                                    "border": "1px solid #e5e7eb",
-                                    "borderRadius": "10px",
-                                    "padding": "12px",
-                                },
-                            ),
-                            html.Div(
-                                _average_results_chart(),
-                                style={
-                                    "flex": 2,
-                                    "backgroundColor": "white",
-                                    "border": "1px solid #e5e7eb",
-                                    "borderRadius": "10px",
-                                    "padding": "12px",
-                                },
-                            ),
-                        ],
-                    ),
-                    html.Div(
+                        _exam_taken_chart(durations),
                         style={
+                            "flex": 3,
                             "backgroundColor": "white",
                             "border": "1px solid #e5e7eb",
                             "borderRadius": "10px",
-                            "padding": "20px",
+                            "padding": "12px",
                         },
-                        children=[
-                            html.H3("Browse Test Results", style={"marginTop": 0}),
-                            _results_table(),
+                    ),
+                    html.Div(
+                        [
+                            html.H3(
+                                "Latest Performance",
+                                style={
+                                    "margin": "4px 0 0 4px",
+                                    "fontSize": "16px",
+                                    "fontWeight": "normal",
+                                    "color": "#374151",
+                                },
+                            ),
+                            _latest_performance_chart(latest_percent),
                         ],
+                        style={
+                            "flex": 2,
+                            "backgroundColor": "white",
+                            "border": "1px solid #e5e7eb",
+                            "borderRadius": "10px",
+                            "padding": "12px",
+                        },
                     ),
                 ],
             ),
+            html.Div(
+                style={
+                    "backgroundColor": "white",
+                    "border": "1px solid #e5e7eb",
+                    "borderRadius": "10px",
+                    "padding": "20px",
+                },
+                children=_browse_results_block(),
+            ),
         ],
+        active="Dashboard",
     )
