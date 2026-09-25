@@ -1,6 +1,7 @@
 """Integration tests for Flask before_request auth gate and protected routes."""
 
 import os
+import re
 
 import pytest
 
@@ -80,10 +81,24 @@ def test_signup_page_accessible_without_auth(client):
     assert response.status_code == 200
 
 
+def _csrf_token(client, path):
+    html = client.get(path).get_data(as_text=True)
+    match = re.search(r'name="csrf_token"[^>]*value="([^"]+)"', html)
+    if match is None:
+        match = re.search(r'value="([^"]+)"[^>]*name="csrf_token"', html)
+    assert match, f"CSRF token missing on GET {path}"
+    return match.group(1)
+
+
 def test_signup_redirects_to_dashboard(client):
+    token = _csrf_token(client, "/signup")
     response = client.post(
         "/signup",
-        data={"email": "newuser@example.com", "password": "TestPassword123"},
+        data={
+            "email": "newuser@example.com",
+            "password": "TestPassword123",
+            "csrf_token": token,
+        },
         follow_redirects=False,
     )
     assert response.status_code == 302
@@ -95,9 +110,14 @@ def test_login_redirects_to_dashboard(client, dash_app):
         user, error = create_user("loginland@example.com", "TestPassword123")
         assert error is None, error
 
+    token = _csrf_token(client, "/login")
     response = client.post(
         "/login",
-        data={"email": "loginland@example.com", "password": "TestPassword123"},
+        data={
+            "email": "loginland@example.com",
+            "password": "TestPassword123",
+            "csrf_token": token,
+        },
         follow_redirects=False,
     )
     assert response.status_code == 302
