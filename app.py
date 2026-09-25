@@ -17,7 +17,7 @@ import load_env  # noqa: F401 — local .env; does not override Cloud Run / CI e
 
 import dash
 from dash import Dash, dcc, html
-from flask import Flask, redirect, render_template, request
+from flask import Flask, has_request_context, redirect, render_template, request
 from flask_login import LoginManager, current_user, login_user, logout_user
 from flask_wtf.csrf import CSRFProtect
 
@@ -161,12 +161,22 @@ app = Dash(
 )
 app.title = "CySA+ Domain Practice Exam"
 
-app.layout = html.Div(
-    [
-        dcc.Store(id="exam-session-store", storage_type="session"),
-        dash.page_container,
-    ]
-)
+def serve_layout():
+    """Seed the store from Postgres so resume paints on the first layout."""
+    session = None
+    if has_request_context() and current_user.is_authenticated:
+        from attempts import public_exam_session
+
+        session = public_exam_session(current_user.id)
+    return html.Div(
+        [
+            dcc.Store(id="exam-session-store", storage_type="session", data=session),
+            dash.page_container,
+        ]
+    )
+
+
+app.layout = serve_layout
 
 if __name__ == "__main__":
     # Local development only: debug=True enables auto-reload and detailed errors.

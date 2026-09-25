@@ -476,6 +476,12 @@ REPLACE_PANEL_STYLE = {"display": "block", "marginBottom": "12px"}
 QUIT_PANEL_STYLE = {"display": "block", "marginTop": "16px"}
 
 
+def _is_real_click():
+    """Ignore Dash remounts that replay n_clicks when a hidden control appears."""
+    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
+    return bool(triggered and triggered.get("value"))
+
+
 @dash.callback(
     Output("exam-session-store", "data"),
     Output("setup-error-msg", "children"),
@@ -489,6 +495,8 @@ QUIT_PANEL_STYLE = {"display": "block", "marginTop": "16px"}
 )
 def start_exam(_exam_clicks, _practice_clicks, domain, subsection):
     """Create a Postgres attempt, or ask to abandon the current in-progress one."""
+    if not _is_real_click():
+        return dash.no_update, dash.no_update, dash.no_update, dash.no_update
     mode = _requested_mode(dash.ctx.triggered_id)
     if not current_user.is_authenticated:
         return dash.no_update, "Please log in.", HIDDEN, mode
@@ -515,6 +523,8 @@ def start_exam(_exam_clicks, _practice_clicks, domain, subsection):
 )
 def confirm_replace_start(_confirm, _cancel, domain, subsection, pending_mode):
     """Abandon the in-progress row only after the user confirms a new start."""
+    if not _is_real_click():
+        return dash.no_update, dash.no_update, dash.no_update
     if not current_user.is_authenticated:
         return dash.no_update, dash.no_update, HIDDEN
     if dash.ctx.triggered_id == "replace-cancel-btn":
@@ -553,8 +563,10 @@ def toggle_quit_confirm(_quit, _cancel):
     State("exam-session-store", "data"),
     prevent_initial_call=True,
 )
-def confirm_quit(_n_clicks, data):
+def confirm_quit(n_clicks, data):
     """Abandon the current attempt after an explicit Quit confirm."""
+    if not _is_real_click() or not n_clicks:
+        return dash.no_update, dash.no_update
     if not current_user.is_authenticated:
         return dash.no_update, HIDDEN
     attempt_id = (data or {}).get("attempt_id")
@@ -649,6 +661,8 @@ def persist_selected_option(_a, _b, _c, _d, data):
 )
 def grade_current_question(_n_clicks, data):
     """Practice only: reveal after an option is selected. No DB score write."""
+    if not _is_real_click():
+        return dash.no_update
     if not data or data.get("mode") != ExamAttempt.MODE_PRACTICE:
         return dash.no_update
     idx = data.get("current_index", 0)
@@ -927,10 +941,8 @@ def hydrate_in_progress(_ready):
 )
 def submit_exam(n_clicks, data):
     """Complete the attempt from DB answers and redirect. Ignore client scores."""
-    triggered = dash.ctx.triggered[0] if dash.ctx.triggered else None
     if (
-        not triggered
-        or not triggered.get("value")
+        not _is_real_click()
         or not n_clicks
         or dash.ctx.triggered_id != "submit-exam-btn"
     ):
