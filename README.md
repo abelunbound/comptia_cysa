@@ -10,6 +10,9 @@ your results with a per-question breakdown.
 python -m venv venv
 source venv/bin/activate  # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
+# Local unit + e2e extras (not installed in the Cloud Run image):
+# pip install -r requirements-test.txt
+# pip install -r requirements-e2e.txt && playwright install chromium
 ```
 
 ### Authentication Setup
@@ -90,8 +93,12 @@ docker run -d --name cysa-test-pg -p 5432:5432 \
 export TEST_DATABASE_URL='postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test'
 export SECRET_KEY=test-local-secret
 
+pip install -r requirements-test.txt
 pytest -v tests/
-pytest -v e2e/ --browser chromium   # first time: playwright install chromium
+
+pip install -r requirements-e2e.txt
+playwright install chromium
+pytest -v e2e/ --browser chromium
 ```
 
 `tests/` is Flask-client / unit. `e2e/` is Playwright (login → exam paints → Dash).

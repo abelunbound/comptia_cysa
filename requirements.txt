@@ -8,6 +8,3 @@ Flask-WTF>=1.2.1
 Flask-SQLAlchemy>=3.1.1
 bcrypt>=4.1.2
 psycopg2-binary>=2.9.9
-pytest>=7.4.0,<9
-pytest-playwright==0.6.2
-playwright==1.49.1
