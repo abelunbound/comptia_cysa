@@ -1,9 +1,11 @@
 """Playwright: login → start → answer → refresh → resume → complete → DB results."""
 
 from e2e.helpers import (
+    open_cysa_exam,
     signup_and_land,
     start_seeded_exam,
     unique_email,
+    wait_for_dashboard,
     wait_for_in_progress_exam,
     wait_for_saved_option,
 )
@@ -48,4 +50,6 @@ def test_logout_login_resumes_in_progress(page, live_server):
     page.locator('input[name="email"]').fill(email)
     page.locator('input[name="password"]').fill(password)
     page.get_by_role("button", name="Log In").click()
+    wait_for_dashboard(page, base)
+    open_cysa_exam(page, base)
     wait_for_in_progress_exam(page, base)

@@ -59,6 +59,12 @@ def test_smoke_signup_logout_login_protected_access(client, dash_app):
     
     response = client.get("/admin", follow_redirects=False)
     assert response.status_code == 200, "Authenticated user should access /admin"
+
+    response = client.get("/exams", follow_redirects=False)
+    assert response.status_code == 200, "Authenticated user should access /exams"
+
+    response = client.get("/admin/results", follow_redirects=False)
+    assert response.status_code == 200, "Authenticated user should access /admin/results"
     
     # Step 5: Logout (Flask route redirects to /login)
     response = client.get("/logout", follow_redirects=False)

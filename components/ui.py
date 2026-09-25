@@ -163,3 +163,48 @@ def score_ring(correct, total, size=180, incorrect=0):
     )
 
 
+def account_controls():
+    """Logout + profile icon (links to the dashboard)."""
+    return html.Div(
+        style={
+            "display": "flex",
+            "justifyContent": "flex-end",
+            "alignItems": "center",
+            "gap": "12px",
+        },
+        children=[
+            html.A(
+                "Logout",
+                href="/logout",
+                style={
+                    "fontSize": "14px",
+                    "color": ACCENT_COLOR,
+                    "textDecoration": "none",
+                    "fontWeight": "500",
+                },
+            ),
+            dcc.Link(
+                html.Div(
+                    "A",
+                    title="Dashboard",
+                    style={
+                        "width": "40px",
+                        "height": "40px",
+                        "borderRadius": "50%",
+                        "backgroundColor": ACCENT_COLOR,
+                        "display": "flex",
+                        "alignItems": "center",
+                        "justifyContent": "center",
+                        "fontSize": "15px",
+                        "fontWeight": "bold",
+                        "color": "white",
+                        "cursor": "pointer",
+                    },
+                ),
+                href="/admin",
+                style={"textDecoration": "none"},
+            ),
+        ],
+    )
+
+

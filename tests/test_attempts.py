@@ -1,6 +1,6 @@
 """M3 #17: persist answers, server-side score, AuthZ, answer secrecy."""
 
-from datetime import datetime
+from datetime import datetime, timedelta
 
 import os
 
@@ -10,12 +10,18 @@ from flask import Flask
 from attempts import (
     abandon_attempt,
     complete_attempt,
+    dashboard_metrics,
+    dashboard_results_page,
+    dashboard_results_rows,
     get_in_progress_attempt,
+    latest_exam_percent,
     list_completed_summaries,
     public_exam_session,
+    recent_attempt_durations,
     review_payload,
     save_selected_option,
     start_attempt,
+    time_target_baseline,
 )
 from auth import AttemptAnswer, ExamAttempt, Question, create_user, db, init_auth
 from tests.conftest import TEST_ENGINE_OPTIONS, reset_schema
@@ -234,3 +240,172 @@ def test_unanswered_counts_as_incorrect(app_context):
     assert completed.score_correct == 0
     assert completed.score_total == 1
     assert datetime.utcnow() >= completed.completed_at
+
+
+def test_dashboard_metrics_empty_and_scoped(app_context):
+    owner = _user("owner@example.com")
+    other = _user("other@example.com")
+    question = _question("B")
+    other_attempt = start_attempt(other.id, "Dom", "Sub", [question.id])
+    save_selected_option(other.id, other_attempt.id, question.id, "B")
+    complete_attempt(other.id, other_attempt.id)
+
+    empty = dashboard_metrics(owner.id)
+    assert empty == {
+        "highest_score": 0,
+        "total_attempts": 0,
+        "pass_rate": 0,
+        "average_score": 0,
+    }
+
+    first = start_attempt(owner.id, "Dom", "Sub", [question.id])
+    save_selected_option(owner.id, first.id, question.id, "B")
+    complete_attempt(owner.id, first.id)
+    abandoned = start_attempt(owner.id, "Dom", "Sub", [question.id])
+    abandon_attempt(owner.id, abandoned.id)
+    second = start_attempt(owner.id, "Dom", "Sub", [question.id])
+    complete_attempt(owner.id, second.id)
+
+    metrics = dashboard_metrics(owner.id)
+    assert metrics["total_attempts"] == 2
+    assert metrics["highest_score"] == 100
+    assert metrics["average_score"] == 50
+    assert metrics["pass_rate"] == 50
+    assert dashboard_metrics(other.id)["total_attempts"] == 1
+
+
+def test_time_target_baseline_runs_80_to_50_over_ten_slots():
+    baseline = time_target_baseline()
+    assert len(baseline) == 10
+    assert baseline[0] == 80
+    assert baseline[-1] == 50
+    assert baseline == sorted(baseline, reverse=True)
+
+
+def test_recent_attempt_durations_uses_submit_delta_and_last_ten(app_context):
+    owner = _user("owner@example.com")
+    other = _user("other@example.com")
+    question = _question()
+    origin = datetime(2026, 1, 1, 12, 0, 0)
+
+    other_row = start_attempt(other.id, "Dom", "Sub", [question.id])
+    complete_attempt(other.id, other_row.id)
+    other_row.started_at = origin
+    other_row.completed_at = origin + timedelta(minutes=99)
+    db.session.commit()
+
+    abandoned = start_attempt(owner.id, "Dom", "Sub", [question.id])
+    abandon_attempt(owner.id, abandoned.id)
+
+    for index in range(11):
+        row = start_attempt(owner.id, "Dom", "Sub", [question.id])
+        complete_attempt(owner.id, row.id)
+        row.started_at = origin + timedelta(days=index)
+        row.completed_at = row.started_at + timedelta(minutes=10 + index)
+        db.session.commit()
+
+    minutes = recent_attempt_durations(owner.id)
+    assert minutes == [11.0, 12.0, 13.0, 14.0, 15.0, 16.0, 17.0, 18.0, 19.0, 20.0]
+    assert recent_attempt_durations(other.id) == [99.0]
+
+
+def test_latest_exam_percent_is_most_recent_completed(app_context):
+    owner = _user("owner@example.com")
+    other = _user("other@example.com")
+    question = _question("B")
+    assert latest_exam_percent(owner.id) is None
+
+    other_row = start_attempt(other.id, "Dom", "Sub", [question.id])
+    save_selected_option(other.id, other_row.id, question.id, "B")
+    complete_attempt(other.id, other_row.id)
+
+    first = start_attempt(owner.id, "Dom", "Sub", [question.id])
+    save_selected_option(owner.id, first.id, question.id, "B")
+    complete_attempt(owner.id, first.id)
+    second = start_attempt(owner.id, "Dom", "Sub", [question.id])
+    complete_attempt(owner.id, second.id)
+
+    assert latest_exam_percent(owner.id) == 0
+    assert latest_exam_percent(other.id) == 100
+
+
+def test_dashboard_results_rows_are_user_scoped_newest_first(app_context):
+    owner = _user("owner@example.com")
+    other = _user("other@example.com")
+    question = _question("B")
+    origin = datetime(2026, 1, 20, 12, 0, 0)
+
+    other_row = start_attempt(other.id, "Dom", "1.1 Explain concepts", [question.id])
+    save_selected_option(other.id, other_row.id, question.id, "B")
+    complete_attempt(other.id, other_row.id)
+
+    first = start_attempt(owner.id, "Dom", "1.1 Explain concepts", [question.id])
+    save_selected_option(owner.id, first.id, question.id, "B")
+    complete_attempt(owner.id, first.id)
+    first.completed_at = origin
+    db.session.commit()
+
+    abandoned = start_attempt(owner.id, "Dom", "1.1 Explain concepts", [question.id])
+    abandon_attempt(owner.id, abandoned.id)
+
+    second = start_attempt(owner.id, "Dom", "1.2 Analyze indicators", [question.id])
+    complete_attempt(owner.id, second.id)
+    second.completed_at = origin + timedelta(days=1)
+    db.session.commit()
+
+    third = start_attempt(owner.id, "Dom", "1.1 Explain concepts", [question.id])
+    save_selected_option(owner.id, third.id, question.id, "B")
+    complete_attempt(owner.id, third.id)
+    third.completed_at = origin + timedelta(days=2)
+    db.session.commit()
+
+    assert dashboard_results_rows(owner.id) == [
+        {
+            "subsection": "1.1 Explain concepts",
+            "score": "100%",
+            "attempts": 2,
+            "date": "Jan 22, 2026",
+        },
+        {
+            "subsection": "1.2 Analyze indicators",
+            "score": "0%",
+            "attempts": 1,
+            "date": "Jan 21, 2026",
+        },
+        {
+            "subsection": "1.1 Explain concepts",
+            "score": "100%",
+            "attempts": 1,
+            "date": "Jan 20, 2026",
+        },
+    ]
+    other_rows = dashboard_results_rows(other.id)
+    assert len(other_rows) == 1
+    assert other_rows[0]["subsection"] == "1.1 Explain concepts"
+    assert dashboard_results_rows(_user("empty@example.com").id) == []
+
+
+def test_dashboard_results_page_is_five_newest(app_context):
+    user = _user("paged@example.com")
+    question = _question()
+    origin = datetime(2026, 1, 1, 12, 0, 0)
+    for index in range(6):
+        row = start_attempt(user.id, "Dom", "Sub", [question.id])
+        complete_attempt(user.id, row.id)
+        row.completed_at = origin + timedelta(days=index)
+        db.session.commit()
+
+    first = dashboard_results_page(user.id, page=1)
+    assert first["total"] == 6
+    assert first["pages"] == 2
+    assert first["page"] == 1
+    assert len(first["rows"]) == 5
+    assert first["rows"][0]["date"] == "Jan 6, 2026"
+
+    second = dashboard_results_page(user.id, page=2)
+    assert second["page"] == 2
+    assert len(second["rows"]) == 1
+    assert second["rows"][0]["date"] == "Jan 1, 2026"
+
+    clamped = dashboard_results_page(user.id, page=99)
+    assert clamped["page"] == 2

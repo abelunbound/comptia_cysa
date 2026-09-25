@@ -6,9 +6,9 @@ the top-right corner links to the admin dashboard, which has its own
 full-page layout and does not use this shell.
 """
 
-from dash import dcc, html
+from dash import html
 
-from components.ui import ACCENT_COLOR
+from components.ui import account_controls
 
 
 def shell(content):
@@ -24,48 +24,7 @@ def shell(content):
         children=html.Div(
             style={"padding": "32px 0", "boxSizing": "border-box"},
             children=[
-                html.Div(
-                    style={
-                        "display": "flex",
-                        "justifyContent": "flex-end",
-                        "alignItems": "center",
-                        "gap": "12px",
-                        "marginBottom": "16px",
-                    },
-                    children=[
-                        html.A(
-                            "Logout",
-                            href="/logout",
-                            style={
-                                "fontSize": "14px",
-                                "color": ACCENT_COLOR,
-                                "textDecoration": "none",
-                                "fontWeight": "500",
-                            },
-                        ),
-                        dcc.Link(
-                            html.Div(
-                                "A",
-                                title="Admin Dashboard",
-                                style={
-                                    "width": "40px",
-                                    "height": "40px",
-                                    "borderRadius": "50%",
-                                    "backgroundColor": ACCENT_COLOR,
-                                    "display": "flex",
-                                    "alignItems": "center",
-                                    "justifyContent": "center",
-                                    "fontSize": "15px",
-                                    "fontWeight": "bold",
-                                    "color": "white",
-                                    "cursor": "pointer",
-                                },
-                            ),
-                            href="/admin",
-                            style={"textDecoration": "none"},
-                        ),
-                    ],
-                ),
+                html.Div(account_controls(), style={"marginBottom": "16px"}),
                 content,
             ],
         ),

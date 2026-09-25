@@ -10,6 +10,12 @@ from datetime import datetime
 from auth import AttemptAnswer, ExamAttempt, Question, db
 
 VALID_OPTIONS = frozenset({"A", "B", "C", "D"})
+# Same green threshold as the results tiles / donut.
+PASS_PERCENT = 70
+CHART_ATTEMPT_SLOTS = 10
+RESULTS_PAGE_SIZE = 5
+BASELINE_START_MINUTES = 80
+BASELINE_END_MINUTES = 50
 
 
 def _as_int(value):
@@ -268,6 +274,144 @@ def list_completed_summaries(user_id):
             }
         )
     return summaries
+
+
+def dashboard_metrics(user_id):
+    """Highest / count / pass rate / average for this user's completed attempts."""
+    rows = ExamAttempt.query.filter_by(
+        user_id=user_id, status=ExamAttempt.STATUS_COMPLETED
+    ).all()
+    percents = []
+    for attempt in rows:
+        total = attempt.score_total or 0
+        if total <= 0:
+            continue
+        percents.append(100.0 * (attempt.score_correct or 0) / total)
+    if not percents:
+        return {
+            "highest_score": 0,
+            "total_attempts": 0,
+            "pass_rate": 0,
+            "average_score": 0,
+        }
+    passed = sum(1 for percent in percents if percent >= PASS_PERCENT)
+    return {
+        "highest_score": round(max(percents)),
+        "total_attempts": len(percents),
+        "pass_rate": round(100.0 * passed / len(percents)),
+        "average_score": round(sum(percents) / len(percents)),
+    }
+
+
+def _display_date(value):
+    if not value:
+        return ""
+    return f"{value.strftime('%b')} {value.day}, {value.year}"
+
+
+def dashboard_results_rows(user_id):
+    """Completed attempts for the dashboard table. Newest first. This user only.
+
+    Attempts is the 1-based count of completed tries at that subsection.
+    Score is computed from stored score_correct / score_total.
+    """
+    rows = (
+        ExamAttempt.query.filter_by(
+            user_id=user_id, status=ExamAttempt.STATUS_COMPLETED
+        )
+        .order_by(ExamAttempt.completed_at.asc(), ExamAttempt.id.asc())
+        .all()
+    )
+    seen = {}
+    out = []
+    for attempt in rows:
+        key = (attempt.domain or "", attempt.subsection or "")
+        seen[key] = seen.get(key, 0) + 1
+        total = attempt.score_total or 0
+        percent = 0
+        if total:
+            percent = round(100.0 * (attempt.score_correct or 0) / total)
+        out.append(
+            {
+                "subsection": attempt.subsection or "—",
+                "score": f"{percent}%",
+                "attempts": seen[key],
+                "date": _display_date(attempt.completed_at),
+            }
+        )
+    out.reverse()
+    return out
+
+
+def dashboard_results_page(user_id, page=1, page_size=RESULTS_PAGE_SIZE):
+    """One page of dashboard rows. Page 1 is the 5 most recent."""
+    all_rows = dashboard_results_rows(user_id)
+    total = len(all_rows)
+    pages = max(1, (total + page_size - 1) // page_size) if total else 1
+    try:
+        page = int(page)
+    except (TypeError, ValueError):
+        page = 1
+    page = max(1, min(page, pages))
+    start = (page - 1) * page_size
+    return {
+        "rows": all_rows[start : start + page_size],
+        "page": page,
+        "pages": pages,
+        "total": total,
+    }
+
+
+def latest_exam_percent(user_id):
+    """Most recently submitted exam score as 0–100. None if none completed."""
+    attempt = (
+        ExamAttempt.query.filter_by(
+            user_id=user_id, status=ExamAttempt.STATUS_COMPLETED
+        )
+        .order_by(ExamAttempt.completed_at.desc(), ExamAttempt.id.desc())
+        .first()
+    )
+    if not attempt or not attempt.score_total:
+        return None
+    return round(100.0 * (attempt.score_correct or 0) / attempt.score_total)
+
+
+def time_target_baseline(slots=CHART_ATTEMPT_SLOTS):
+    """Fixed 80→50 minute target across the chart's attempt slots."""
+    if slots <= 1:
+        return [float(BASELINE_END_MINUTES)]
+    step = (BASELINE_END_MINUTES - BASELINE_START_MINUTES) / (slots - 1)
+    return [round(BASELINE_START_MINUTES + step * index, 1) for index in range(slots)]
+
+
+def _duration_minutes(attempt):
+    started = attempt.started_at
+    finished = attempt.completed_at
+    if not started or not finished:
+        return None
+    seconds = (finished - started).total_seconds()
+    if seconds < 0:
+        return 0.0
+    return round(seconds / 60.0, 1)
+
+
+def recent_attempt_durations(user_id, limit=CHART_ATTEMPT_SLOTS):
+    """Start→Submit minutes for this user's last completed attempts, oldest first."""
+    rows = (
+        ExamAttempt.query.filter_by(
+            user_id=user_id, status=ExamAttempt.STATUS_COMPLETED
+        )
+        .order_by(ExamAttempt.completed_at.desc(), ExamAttempt.id.desc())
+        .limit(limit)
+        .all()
+    )
+    rows.reverse()
+    minutes = []
+    for attempt in rows:
+        duration = _duration_minutes(attempt)
+        if duration is not None:
+            minutes.append(duration)
+    return minutes
 
 
 def review_payload(user_id, attempt_id):
