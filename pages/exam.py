@@ -781,7 +781,6 @@ def update_timer(_n_intervals, data):
     Output("score-ring", "figure"),
     Output("page-number-buttons", "children"),
     Input("exam-session-store", "data"),
-    prevent_initial_call=True,
 )
 def render_exam(data):
     """Show the setup form or the current exam question, based on session state."""

@@ -1,11 +1,11 @@
 """Playwright: practice Grade Now, quit/abandon, and review after complete."""
 
-from e2e.helpers import signup_and_land, start_seeded_exam
+from e2e.helpers import signup_and_land, start_seeded_exam, unique_email
 
 
 def test_practice_mode_grade_now_after_selection(page, live_server):
     base = live_server["base_url"]
-    email = f"practice-{live_server['email']}"
+    email = unique_email("practice")
     password = live_server["password"]
     page.set_default_timeout(25_000)
 
@@ -27,7 +27,7 @@ def test_practice_mode_grade_now_after_selection(page, live_server):
 
 def test_quit_abandon_returns_to_setup(page, live_server):
     base = live_server["base_url"]
-    email = f"abandon-{live_server['email']}"
+    email = unique_email("abandon")
     password = live_server["password"]
     page.set_default_timeout(25_000)
 
@@ -45,7 +45,7 @@ def test_quit_abandon_returns_to_setup(page, live_server):
 
 def test_results_review_loads_from_db(page, live_server):
     base = live_server["base_url"]
-    email = f"review-{live_server['email']}"
+    email = unique_email("review")
     password = live_server["password"]
     page.set_default_timeout(25_000)
 

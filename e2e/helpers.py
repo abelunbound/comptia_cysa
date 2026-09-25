@@ -1,5 +1,17 @@
 """Shared Playwright steps for exam flows."""
 
+import re
+import uuid
+
+
+def unique_email(prefix="e2e"):
+    return f"{prefix}-{uuid.uuid4().hex[:10]}@example.com"
+
+
+def wait_for_home(page, base):
+    """Match only `/`, not `/results` or `/review`."""
+    page.wait_for_url(re.compile(rf"^{re.escape(base.rstrip('/'))}/?$"))
+
 
 def select_dash_dropdown(page, dropdown_id, option_text):
     page.locator(f"#{dropdown_id}").click()
@@ -20,4 +32,4 @@ def signup_and_land(page, base, email, password):
     page.locator('input[name="email"]').fill(email)
     page.locator('input[name="password"]').fill(password)
     page.get_by_role("button", name="Create Account").click()
-    page.wait_for_url(f"{base}/")
+    wait_for_home(page, base)

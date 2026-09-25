@@ -1,11 +1,11 @@
 """Playwright: login → start → answer → refresh → resume → complete → DB results."""
 
-from e2e.helpers import signup_and_land, start_seeded_exam
+from e2e.helpers import signup_and_land, start_seeded_exam, unique_email, wait_for_home
 
 
 def test_refresh_resumes_then_complete_results_from_db(page, live_server):
     base = live_server["base_url"]
-    email = live_server["email"]
+    email = unique_email("refresh")
     password = live_server["password"]
     page.set_default_timeout(25_000)
 
@@ -28,7 +28,7 @@ def test_refresh_resumes_then_complete_results_from_db(page, live_server):
 
 def test_logout_login_resumes_in_progress(page, live_server):
     base = live_server["base_url"]
-    email = f"resume-{live_server['email']}"
+    email = unique_email("resume")
     password = live_server["password"]
     page.set_default_timeout(25_000)
 
@@ -41,7 +41,7 @@ def test_logout_login_resumes_in_progress(page, live_server):
     page.locator('input[name="email"]').fill(email)
     page.locator('input[name="password"]').fill(password)
     page.get_by_role("button", name="Log In").click()
-    page.wait_for_url(f"{base}/")
+    wait_for_home(page, base)
 
     page.get_by_text("Question 1 of 1").wait_for()
     page.locator("#exam-mode-btn").wait_for(state="hidden")
