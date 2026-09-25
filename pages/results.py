@@ -1,10 +1,11 @@
-"""Results page ('/results'): overall performance donut + session progress."""
+"""Results page ('/results'): overall performance donut + completed attempts."""
 
 import dash
 import plotly.graph_objects as go
 from dash import Input, Output, dcc, html
 from flask_login import current_user
 
+from attempts import list_completed_summaries
 from components.shell import shell
 from components.ui import (
     ACCENT_COLOR,
@@ -217,10 +218,13 @@ def _progress_section(history):
 @dash.callback(
     Output("results-container", "children"),
     Input("results-page-ready", "id"),
-    Input("exam-history-store", "data"),
 )
-def render_results(_ready, history):
-    """Render results on first paint and whenever session history changes."""
+def render_results(_ready):
+    """Render results from Postgres (not session history)."""
+    if not current_user.is_authenticated:
+        return _empty_state()
+
+    history = list_completed_summaries(current_user.id)
     if not history:
         return _empty_state()
 

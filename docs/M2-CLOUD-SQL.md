@@ -25,8 +25,9 @@ the existing shared `bankpassport` instance.
    - Cloud SQL Auth Proxy (local seed), and
    - Cloud Run `--add-cloudsql-instances` / Unix socket (runtime).
 2. **Least-privilege `cysa_app`.** Create the DB objects as `postgres`, then
-   grant `cysa_app` only table privileges on `users` and `questions` (see
-   grants below). Never use the `postgres` superuser password in Cloud Run
+   grant `cysa_app` only table privileges on `users`, `questions`,
+   `exam_attempts`, and `attempt_answers` (see grants below). Never use the
+   `postgres` superuser password in Cloud Run
    or in `DATABASE_URL`.
 3. **`DATABASE_URL` only via Secret Manager** (`cysa-exam-database-url`). Never
    pass it with plaintext `--set-env-vars`.
@@ -50,7 +51,7 @@ After first app connect / `db.create_all()` (or seed), grant least privilege
 ```sql
 GRANT CONNECT ON DATABASE cybersecuritylab TO cysa_app;
 GRANT USAGE ON SCHEMA public TO cysa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users, questions TO cysa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users, questions, exam_attempts, attempt_answers TO cysa_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cysa_app;
 -- Optional: revoke anything broader if you created objects as postgres first
 ```

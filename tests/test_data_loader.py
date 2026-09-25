@@ -6,6 +6,7 @@ import pytest
 from data_loader import REQUIRED_COLUMNS, load_questions
 
 EXAM_UI_COLUMNS = {
+    "id",
     "Domain",
     "Sub-Section",
     "Subtopic",
@@ -66,6 +67,7 @@ def test_load_questions_postgres_keeps_exam_dataframe_contract(monkeypatch):
     db_rows = pd.DataFrame(
         [
             {
+                "id": 1,
                 "Domain": "1.0 Security Operations",
                 "Sub-Section": "1.1 Explain concepts",
                 "Subtopic": "Logging Concepts",

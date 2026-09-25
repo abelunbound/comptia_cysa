@@ -7,6 +7,7 @@ import dash
 from dash import ALL, Input, Output, State, dcc, html
 from flask_login import current_user
 
+from attempts import list_completed_summaries, review_payload
 from components.shell import shell
 from components.ui import (
     ACCENT_COLOR,
@@ -51,12 +52,18 @@ def _empty_state():
     )
 
 
-def _current_attempt(history, search):
-    if not history:
-        return None
+def _current_attempt(user_id, search):
+    """Load a completed attempt owned by user_id. Never an in-progress row."""
     params = parse_qs((search or "").lstrip("?"))
     attempt_id = params.get("attempt", [None])[0]
-    return next((a for a in history if a["id"] == attempt_id), None) or history[-1]
+    if attempt_id is not None:
+        payload = review_payload(user_id, attempt_id)
+        if payload:
+            return payload
+    summaries = list_completed_summaries(user_id)
+    if not summaries:
+        return None
+    return review_payload(user_id, summaries[-1]["id"])
 
 
 def _total_pages(total_questions):
@@ -257,7 +264,6 @@ def reset_review_page(pathname, _search):
     Input("review-next-btn-bottom", "n_clicks"),
     Input({"type": "review-page-btn-bottom", "index": ALL}, "n_clicks"),
     State("review-page-store", "data"),
-    State("exam-history-store", "data"),
     State("_pages_location", "search"),
     prevent_initial_call=True,
 )
@@ -269,7 +275,6 @@ def change_review_page(
     _next_bottom,
     _all_bottom,
     current_page,
-    history,
     search,
 ):
     """Move between review pages via either the top or bottom Prev/Next/page-number controls."""
@@ -281,7 +286,10 @@ def change_review_page(
     if not triggered or not triggered.get("value"):
         return dash.no_update
 
-    attempt = _current_attempt(history, search)
+    if not current_user.is_authenticated:
+        return dash.no_update
+
+    attempt = _current_attempt(current_user.id, search)
     if not attempt:
         return dash.no_update
 
@@ -304,15 +312,14 @@ def change_review_page(
     Output("review-container", "children"),
     Input("review-page-ready", "id"),
     Input("_pages_location", "search"),
-    Input("exam-history-store", "data"),
     Input("review-page-store", "data"),
 )
-def render_review(_ready, search, history, page):
-    """Render review content based on exam history and page number."""
-    if not history:
+def render_review(_ready, search, page):
+    """Render review from a completed Postgres attempt owned by the user."""
+    if not current_user.is_authenticated:
         return _empty_state()
 
-    attempt = _current_attempt(history, search)
+    attempt = _current_attempt(current_user.id, search)
     if not attempt:
         return _empty_state()
 

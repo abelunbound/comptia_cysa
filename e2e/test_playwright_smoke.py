@@ -28,7 +28,7 @@ def test_login_exam_paints_and_dash_action(page, live_server):
     page.wait_for_url(f"{base}/")
 
     page.get_by_text("CySA+ V4 (New Version)").wait_for()
-    start = page.locator("#start-exam-btn")
+    start = page.locator("#exam-mode-btn")
     start.wait_for(state="visible")
 
     start.click()

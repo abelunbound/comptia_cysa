@@ -6,12 +6,9 @@ Pages (see pages/):
 - /review  per-question breakdown of a completed attempt
 - /admin   static admin dashboard mockup, reached via the profile icon
 
-Session-scoped state lives in two dcc.Store components below (outside the
-page container so they survive navigation between pages, but reset when the
-browser tab closes):
-
-- exam-session-store: the exam currently in progress or just completed
-- exam-history-store: every attempt completed so far this session
+exam-session-store holds a client-safe copy of the in-progress exam (no
+correct answers). Postgres is the source of truth for answers, score, and
+completed history.
 """
 
 import os
@@ -24,7 +21,7 @@ from flask import Flask, redirect, render_template, request
 from flask_login import LoginManager, current_user, login_user, logout_user
 from flask_wtf.csrf import CSRFProtect
 
-from auth import User, authenticate_user, create_user, get_database_url, init_auth
+from auth import User, authenticate_user, create_user, db, get_database_url, init_auth
 
 # Create Flask first and wire Flask-Login BEFORE Dash imports pages.
 # Dash(use_pages=True) loads pages/*/layout functions that call current_user;
@@ -75,7 +72,7 @@ login_manager.login_view = "/login"
 @login_manager.user_loader
 def load_user(user_id):
     """Load user from database by ID for Flask-Login session management."""
-    return User.query.get(int(user_id))
+    return db.session.get(User, int(user_id))
 
 
 # CSRF: Flask forms only, not Dash AJAX endpoints
@@ -167,7 +164,6 @@ app.title = "CySA+ Domain Practice Exam"
 app.layout = html.Div(
     [
         dcc.Store(id="exam-session-store", storage_type="session"),
-        dcc.Store(id="exam-history-store", storage_type="session"),
         dash.page_container,
     ]
 )

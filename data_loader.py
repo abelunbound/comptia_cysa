@@ -11,7 +11,9 @@ import os
 import pandas as pd
 from sqlalchemy import create_engine, text
 
+# id is required to persist attempt_answers.question_id; exam UI names stay stable.
 REQUIRED_COLUMNS = {
+    "id",
     "Domain",
     "Sub-Section",
     "Subtopic",
@@ -27,6 +29,7 @@ REQUIRED_COLUMNS = {
 _DB_SELECT = text(
     """
     SELECT
+        id,
         domain AS "Domain",
         sub_section AS "Sub-Section",
         subtopic AS "Subtopic",
@@ -52,6 +55,7 @@ def _normalize_df(df: pd.DataFrame) -> pd.DataFrame:
         return df
     for col in ["Domain", "Sub-Section", "Correct Answer"]:
         df[col] = df[col].astype(str).str.strip()
+    df["id"] = df["id"].astype(int)
     return df.reset_index(drop=True)
 
 

@@ -8,7 +8,8 @@ Usage (from repo root):
   python scripts/seed_questions.py
 
 Safe to re-run: clears existing questions rows then re-inserts from CSV.
-Does not touch the users table.
+Does not touch users, exam_attempts, or attempt_answers. Re-seed fails if
+attempt_answers still reference questions.
 """
 
 from __future__ import annotations

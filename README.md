@@ -116,7 +116,7 @@ notes.
 ## How it works
 
 1. On the home page, select a **Domain** (e.g. `Security Operations`) and a
-   **Sub-Section** (e.g. `1.1`), then click **Start Exam**.
+   **Sub-Section** (e.g. `1.1`), then click **Exam Mode** or **Practice Mode**.
 2. The exam includes **every question** matching that Domain + Sub-Section,
    in a shuffled order. Navigate with **Prev** / **Next** -- your answers
    are remembered as you move back and forth.
@@ -152,12 +152,9 @@ table or a failed query raises; there is no SQLite or hardcoded fallback.
 
 ## Session state
 
-Two `dcc.Store(storage_type="session")` components hold state across page
-navigation (they clear when the browser tab closes -- nothing is persisted
-to disk beyond the question bank itself):
-
-- `exam-session-store`: the exam currently in progress or just completed
-- `exam-history-store`: every attempt completed so far this browser session
+`exam-session-store` holds a client-safe view of an in-progress exam (no
+correct answers). Answers, scores, and completed history live in Postgres
+(`exam_attempts` / `attempt_answers`).
 
 ## Project structure
 
