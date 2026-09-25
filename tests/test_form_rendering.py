@@ -4,12 +4,12 @@ import os
 
 import pytest
 
-from app import app as dash_app
 from auth import db
+from tests.conftest import reset_schema
 
 
 @pytest.fixture
-def client():
+def client(dash_app):
     """Create test client on isolated CI Postgres."""
     os.environ["SECRET_KEY"] = "test-secret-key-form-rendering"
     dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
@@ -18,14 +18,14 @@ def client():
     dash_app.server.config["WTF_CSRF_ENABLED"] = False
 
     with dash_app.server.app_context():
-        db.drop_all()
+        reset_schema()
         db.create_all()
 
     with dash_app.server.test_client() as client:
         yield client
 
     with dash_app.server.app_context():
-        db.drop_all()
+        reset_schema()
 
 
 def test_signup_page_renders_form_fields(client):

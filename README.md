@@ -10,6 +10,9 @@ your results with a per-question breakdown.
 python -m venv venv
 source venv/bin/activate  # on Windows: venv\Scripts\activate
 pip install -r requirements.txt
+# Local unit + e2e extras (not installed in the Cloud Run image):
+# pip install -r requirements-test.txt
+# pip install -r requirements-e2e.txt && playwright install chromium
 ```
 
 ### Authentication Setup
@@ -90,8 +93,12 @@ docker run -d --name cysa-test-pg -p 5432:5432 \
 export TEST_DATABASE_URL='postgresql+psycopg2://cysa_test:cysa_test@127.0.0.1:5432/cysa_test'
 export SECRET_KEY=test-local-secret
 
+pip install -r requirements-test.txt
 pytest -v tests/
-pytest -v e2e/ --browser chromium   # first time: playwright install chromium
+
+pip install -r requirements-e2e.txt
+playwright install chromium
+pytest -v e2e/ --browser chromium
 ```
 
 `tests/` is Flask-client / unit. `e2e/` is Playwright (login → exam paints → Dash).
@@ -116,7 +123,7 @@ notes.
 ## How it works
 
 1. On the home page, select a **Domain** (e.g. `Security Operations`) and a
-   **Sub-Section** (e.g. `1.1`), then click **Start Exam**.
+   **Sub-Section** (e.g. `1.1`), then click **Exam Mode** or **Practice Mode**.
 2. The exam includes **every question** matching that Domain + Sub-Section,
    in a shuffled order. Navigate with **Prev** / **Next** -- your answers
    are remembered as you move back and forth.
@@ -152,12 +159,9 @@ table or a failed query raises; there is no SQLite or hardcoded fallback.
 
 ## Session state
 
-Two `dcc.Store(storage_type="session")` components hold state across page
-navigation (they clear when the browser tab closes -- nothing is persisted
-to disk beyond the question bank itself):
-
-- `exam-session-store`: the exam currently in progress or just completed
-- `exam-history-store`: every attempt completed so far this browser session
+`exam-session-store` holds a client-safe view of an in-progress exam (no
+correct answers). Answers, scores, and completed history live in Postgres
+(`exam_attempts` / `attempt_answers`).
 
 ## Project structure
 

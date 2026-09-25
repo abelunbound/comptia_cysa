@@ -7,12 +7,12 @@ import os
 
 import pytest
 
-from app import app as dash_app
 from auth import authenticate_user, create_user, db
+from tests.conftest import reset_schema
 
 
 @pytest.fixture
-def client():
+def client(dash_app):
     """Create test client on isolated CI Postgres."""
     os.environ["SECRET_KEY"] = "test-secret-key-smoke"
     dash_app.server.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
@@ -21,17 +21,17 @@ def client():
     dash_app.server.config["WTF_CSRF_ENABLED"] = False
 
     with dash_app.server.app_context():
-        db.drop_all()
+        reset_schema()
         db.create_all()
 
     with dash_app.server.test_client() as client:
         yield client
 
     with dash_app.server.app_context():
-        db.drop_all()
+        reset_schema()
 
 
-def test_smoke_signup_logout_login_protected_access(client):
+def test_smoke_signup_logout_login_protected_access(client, dash_app):
     """E2E: signup → access protected → logout → login → access protected."""
     
     # Step 1: Verify signup page accessible

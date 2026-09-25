@@ -15,7 +15,7 @@ grants, and secret *shape* only — no passwords and no filled-in URLs.
 | Connection name | `bankpassport-be:us-central1:bankpassport` |
 | Database | `cybersecuritylab` |
 | App role | `cysa_app` (not `postgres`) |
-| Tables | `users`, `questions` (same `DATABASE_URL`) |
+| Tables | `users`, `questions`, `exam_attempts`, `attempt_answers` (same `DATABASE_URL`) |
 
 Runtime path: Cloud Run `--add-cloudsql-instances` → Unix socket
 `/cloudsql/bankpassport-be:us-central1:bankpassport`.
@@ -55,12 +55,19 @@ Cloud Run runtime SA
 | `roles/secretmanager.secretAccessor` on both secrets above | `cybersecuritylab-509321` |
 | `roles/cloudsql.client` | `bankpassport-be` (instance project) |
 
+New attempt tables are created by `db.create_all()` on app init (`init_auth`).
+`exam_attempts` also stores `domain`, `subsection`, ordered `question_ids`,
+and `mode` (`exam` or `practice`). Mode only changes Grade Now; scores and
+results treat both the same.
+`exam_attempts.user_id` and `attempt_answers.attempt_id` cascade on user /
+attempt delete. No TTL. Score columns are server-written on complete only.
+
 `cysa_app` database grants (apply as `postgres` after tables exist):
 
 ```sql
 GRANT CONNECT ON DATABASE cybersecuritylab TO cysa_app;
 GRANT USAGE ON SCHEMA public TO cysa_app;
-GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users, questions TO cysa_app;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE users, questions, exam_attempts, attempt_answers TO cysa_app;
 GRANT USAGE, SELECT ON ALL SEQUENCES IN SCHEMA public TO cysa_app;
 ```
 
